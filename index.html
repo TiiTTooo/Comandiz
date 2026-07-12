@@ -10,29 +10,39 @@
     --cor-card:#ffffff; --cor-texto:#2b2b2b; --cor-texto-suave:#6b6b6b;
     --cor-borda:#e4e0da; --cor-verde:#2f9e44; --cor-amarelo:#e8a800; --cor-vermelho:#d63939;
   }
+  [data-modo="escuro"]{
+    --cor-fundo:#15130f; --cor-card:#211d17; --cor-texto:#f2ece2;
+    --cor-texto-suave:#a89f8f; --cor-borda:#3a332a;
+  }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--cor-fundo);color:var(--cor-texto);}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--cor-fundo);color:var(--cor-texto);transition:background .2s,color .2s;}
   button{cursor:pointer;font-family:inherit;}
-  input,select,textarea{font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--cor-borda);border-radius:8px;width:100%;background:#fff;color:var(--cor-texto);}
+  input,select,textarea{font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--cor-borda);border-radius:8px;width:100%;background:var(--cor-card);color:var(--cor-texto);}
   label{display:block;font-size:13px;color:var(--cor-texto-suave);margin:10px 0 4px;}
   .btn{background:var(--cor-primaria);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:600;}
   .btn:hover{background:var(--cor-primaria-escura);}
-  .btn-secundario{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 16px;font-size:15px;}
+  .btn-secundario{background:var(--cor-card);color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 16px;font-size:15px;}
   .btn-perigo{background:var(--cor-vermelho);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;}
   .btn-pequeno{padding:6px 10px;font-size:13px;border-radius:6px;}
   .forma-pagamento-botoes{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px;}
-  .forma-btn{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 14px;font-size:14px;cursor:pointer;flex:1;min-width:110px;}
+  .forma-btn{background:var(--cor-card);color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 14px;font-size:14px;cursor:pointer;flex:1;min-width:110px;}
   .forma-btn:hover{border-color:var(--cor-primaria);}
   .forma-btn.selecionada{background:var(--cor-primaria);color:#fff;border-color:var(--cor-primaria);font-weight:600;}
   .autocomplete-wrap{position:relative;}
-  .autocomplete-lista{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--cor-borda);border-radius:8px;margin-top:2px;max-height:180px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.12);}
+  .autocomplete-lista{position:absolute;top:100%;left:0;right:0;background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:8px;margin-top:2px;max-height:180px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.12);}
   .autocomplete-item{padding:9px 10px;cursor:pointer;font-size:14px;}
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
-  .tema-swatches{display:flex;gap:10px;flex-wrap:wrap;}
-  .tema-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;box-shadow:0 0 0 2px transparent;}
-  .tema-swatch.selecionado{box-shadow:0 0 0 2px #fff;}
-  .tema-swatches-sidebar{padding:0 12px 14px;}
+  .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;}
+  .toggle{position:relative;width:44px;height:24px;flex-shrink:0;display:inline-block;}
+  .toggle input{opacity:0;width:0;height:0;position:absolute;}
+  .toggle-slider{position:absolute;inset:0;background:var(--cor-borda);border-radius:24px;cursor:pointer;transition:.2s;}
+  .toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+  .toggle input:checked + .toggle-slider{background:var(--cor-primaria);}
+  .toggle input:checked + .toggle-slider::before{transform:translateX(20px);}
+  .config-swatches-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
+  .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .config-swatch.selecionado{border-color:var(--cor-texto);}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
   .linha{display:flex;gap:10px;flex-wrap:wrap;}
   .linha > *{flex:1;min-width:140px;}
@@ -80,7 +90,7 @@
 
   .modal-fundo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:100;padding:16px;}
   .modal-fundo.aberto{display:flex;}
-  .modal-caixa{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;}
+  .modal-caixa{background:var(--cor-card);border-radius:14px;padding:24px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;}
   .modal-caixa h2{margin-top:0;}
   .item-linha{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
   .item-linha span{flex:1;}
@@ -92,7 +102,7 @@
   .toast-erro{background:var(--cor-vermelho);}
 
   .cozinha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
-  .cozinha-card{background:#fff;border:1px solid var(--cor-borda);border-radius:12px;padding:14px;}
+  .cozinha-card{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:14px;}
   .cozinha-card.pronto{border-color:var(--cor-verde);background:#f4fcf5;}
   .cozinha-card ul{padding-left:18px;margin:8px 0;}
   .ordem-btns button{background:none;border:none;color:var(--cor-texto-suave);font-size:12px;padding:2px 4px;}
@@ -207,7 +217,7 @@
     <button class="nav-btn" data-aba="minha-loja" onclick="trocarAba('minha-loja')">🏪 Minha Loja</button>
     <button class="nav-btn" data-aba="master" id="nav-master" onclick="trocarAba('master')" style="display:none;">🛡️ Master</button>
     <div class="sair">
-      <div class="tema-swatches tema-swatches-sidebar" id="tema-swatches" title="Tema de cores"></div>
+      <button class="nav-btn" onclick="abrirModalConfiguracoes()">⚙️ Configurações</button>
       <button class="nav-btn" onclick="sair()">🚪 Sair</button>
     </div>
   </nav>
@@ -359,7 +369,7 @@
       <div class="cartao">
         <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
           <div>
-            <img id="ml-logo-preview" src="" alt="Logo da loja" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--cor-borda);background:#fff;display:none;">
+            <img id="ml-logo-preview" src="" alt="Logo da loja" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--cor-borda);background:var(--cor-card);display:none;">
             <div id="ml-logo-vazio" style="width:120px;height:120px;border-radius:12px;border:1px dashed var(--cor-borda);display:flex;align-items:center;justify-content:center;color:var(--cor-texto-suave);font-size:12px;text-align:center;">Sem logo</div>
             <label style="margin-top:10px;">Trocar logo</label>
             <input type="file" id="ml-logo-input" accept="image/*" onchange="enviarLogoLoja(this.files[0])">
@@ -1542,24 +1552,32 @@ function abrirModalConvite(){
 }
 
 // =========================================================================
-// TEMA DE CORES (preferência salva no navegador, não no banco)
+// CONFIGURAÇÕES: modo escuro/claro + cor de destaque
+// (preferências salvas no navegador de cada pessoa, não no banco — igual
+// ao Hortiz, cada login pode ter o seu próprio jeito de ver o sistema)
 // =========================================================================
 const TEMAS_CORES = [
-  { id: 'laranja', nome: 'Laranja', primaria: '#e8590c', escura: '#c94a08' },
-  { id: 'verde', nome: 'Verde', primaria: '#2f9e44', escura: '#237032' },
-  { id: 'azul', nome: 'Azul', primaria: '#1971c2', escura: '#145591' },
-  { id: 'vermelho', nome: 'Vermelho', primaria: '#d63939', escura: '#b52d2d' },
-  { id: 'roxo', nome: 'Roxo', primaria: '#7048e8', escura: '#5f3dc4' },
-  { id: 'rosa', nome: 'Rosa', primaria: '#e64980', escura: '#c2255c' },
-  { id: 'grafite', nome: 'Grafite', primaria: '#343a40', escura: '#212529' }
+  { id: 'verde-musgo', nome: 'Verde Musgo', primaria: '#3ecf6e', escura: '#28a558' },
+  { id: 'verde-lima', nome: 'Verde Lima', primaria: '#a3e635', escura: '#6fb800' },
+  { id: 'verde-agua', nome: 'Verde Água', primaria: '#34d399', escura: '#059669' },
+  { id: 'azul-royal', nome: 'Azul Royal', primaria: '#60a5fa', escura: '#2563eb' },
+  { id: 'azul-indigo', nome: 'Azul Índigo', primaria: '#818cf8', escura: '#4f46e5' },
+  { id: 'azul-ceu', nome: 'Azul Céu', primaria: '#38bdf8', escura: '#0284c7' },
+  { id: 'laranja', nome: 'Laranja', primaria: '#fb923c', escura: '#c2410c' },
+  { id: 'ambar', nome: 'Âmbar', primaria: '#fbbf24', escura: '#b45309' },
+  { id: 'vermelho-rose', nome: 'Vermelho Rose', primaria: '#f87171', escura: '#dc2626' },
+  { id: 'violeta', nome: 'Violeta', primaria: '#a78bfa', escura: '#7c3aed' },
+  { id: 'rosa', nome: 'Rosa', primaria: '#f472b6', escura: '#db2777' },
+  { id: 'fucsia', nome: 'Fúcsia', primaria: '#e879f9', escura: '#a21caf' }
 ];
 
 function obterTemaSalvo(){
-  try{ return localStorage.getItem('comandiz_tema') || 'laranja'; }catch(e){ return 'laranja'; }
+  try{ return localStorage.getItem('comandiz_tema') || null; }catch(e){ return null; }
 }
 
 function aplicarTema(temaId, persistir){
-  const tema = TEMAS_CORES.find(t => t.id === temaId) || TEMAS_CORES[0];
+  const tema = TEMAS_CORES.find(t => t.id === temaId);
+  if(!tema) return;
   document.documentElement.style.setProperty('--cor-primaria', tema.primaria);
   document.documentElement.style.setProperty('--cor-primaria-escura', tema.escura);
   if(persistir){
@@ -1568,20 +1586,49 @@ function aplicarTema(temaId, persistir){
   renderizarSwatchesTema();
 }
 
+function obterModoEscuro(){
+  try{ return localStorage.getItem('comandiz_modo_escuro') === '1'; }catch(e){ return false; }
+}
+
+function alternarModoEscuro(ativo){
+  document.documentElement.dataset.modo = ativo ? 'escuro' : 'claro';
+  try{ localStorage.setItem('comandiz_modo_escuro', ativo ? '1' : '0'); }catch(e){}
+}
+
+// Chamado uma vez no boot (antes até de logar) pra já entrar com a
+// preferência salva, em vez de piscar no tema errado por um instante.
 function carregarTemaSalvo(){
-  aplicarTema(obterTemaSalvo(), false);
+  const temaSalvo = obterTemaSalvo();
+  if(temaSalvo) aplicarTema(temaSalvo, false);
+  document.documentElement.dataset.modo = obterModoEscuro() ? 'escuro' : 'claro';
 }
 
 function renderizarSwatchesTema(){
-  const container = document.getElementById('tema-swatches');
+  const container = document.getElementById('config-swatches-grid');
   if(!container) return;
   const temaAtual = obterTemaSalvo();
   container.innerHTML = TEMAS_CORES.map(t => (
-    '<div class="tema-swatch' + (t.id === temaAtual ? ' selecionado' : '') + '" ' +
-      'style="background:' + t.primaria + ';" title="' + t.nome + '" onclick="aplicarTema(\'' + t.id + '\', true)">' +
-      (t.id === temaAtual ? '✓' : '') +
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;" ' +
+      'onclick="aplicarTema(\'' + t.id + '\', true)" title="' + t.nome + '">' +
+      '<div class="config-swatch' + (t.id === temaAtual ? ' selecionado' : '') + '" style="background:' + t.primaria + ';"></div>' +
+      '<span style="font-size:10px;color:var(--cor-texto-suave);text-align:center;line-height:1.15;">' + t.nome + '</span>' +
     '</div>'
   )).join('');
+}
+
+function abrirModalConfiguracoes(){
+  const modoEscuroAtivo = obterModoEscuro();
+  abrirModal(
+    '<h2>⚙️ Configurações</h2>' +
+    '<div class="toggle-row">' +
+      '<span>🌙 Modo escuro</span>' +
+      '<label class="toggle"><input type="checkbox" id="cfg-modo-escuro" ' + (modoEscuroAtivo ? 'checked' : '') + ' ' +
+        'onchange="alternarModoEscuro(this.checked)"><span class="toggle-slider"></span></label>' +
+    '</div>' +
+    '<label style="margin-top:16px;">Cor de destaque</label>' +
+    '<div class="config-swatches-grid" id="config-swatches-grid"></div>'
+  );
+  renderizarSwatchesTema();
 }
 
 // =========================================================================
