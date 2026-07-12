@@ -20,6 +20,10 @@
   .btn-secundario{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 16px;font-size:15px;}
   .btn-perigo{background:var(--cor-vermelho);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;}
   .btn-pequeno{padding:6px 10px;font-size:13px;border-radius:6px;}
+  .forma-pagamento-botoes{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px;}
+  .forma-btn{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 14px;font-size:14px;cursor:pointer;flex:1;min-width:110px;}
+  .forma-btn:hover{border-color:var(--cor-primaria);}
+  .forma-btn.selecionada{background:var(--cor-primaria);color:#fff;border-color:var(--cor-primaria);font-weight:600;}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
   .linha{display:flex;gap:10px;flex-wrap:wrap;}
   .linha > *{flex:1;min-width:140px;}
@@ -828,10 +832,13 @@ async function abrirDetalhePedido(id){
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
     (finalizavel ? (
       '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
-      '<select id="dp-pagamento" onchange="document.getElementById(\'dp-cliente-wrap\').style.display = this.value===\'fiado\'?\'block\':\'none\'">' +
-      '<option value="dinheiro">Dinheiro</option><option value="pix">Pix</option>' +
-      '<option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option>' +
-      '<option value="fiado">Fiado (fica devendo)</option></select>' +
+      '<input type="hidden" id="dp-pagamento" value="">' +
+      '<div class="forma-pagamento-botoes" id="dp-pagamento-botoes">' +
+        ['dinheiro:Dinheiro','pix:Pix','debito:Cartão Débito','credito:Cartão Crédito','fiado:Fiado'].map(par => {
+          const [valor, rotulo] = par.split(':');
+          return '<button type="button" class="forma-btn" data-valor="' + valor + '" onclick="selecionarFormaPagamento(this,\'' + valor + '\')">' + rotulo + '</button>';
+        }).join('') +
+      '</div>' +
       '<div id="dp-cliente-wrap" style="display:none;">' +
         '<label>Cliente (pra quem vai o fiado)</label>' +
         '<select id="dp-cliente" onchange="document.getElementById(\'dp-cliente-novo-wrap\').style.display = this.value===\'__novo__\'?\'block\':\'none\'">' +
@@ -845,6 +852,17 @@ async function abrirDetalhePedido(id){
       '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ')">Cancelar pedido</button>'
     ) : '')
   );
+  if(finalizavel){
+    const primeiroBotao = document.querySelector('#dp-pagamento-botoes .forma-btn');
+    if(primeiroBotao) selecionarFormaPagamento(primeiroBotao, 'dinheiro');
+  }
+}
+
+function selecionarFormaPagamento(botaoClicado, valor){
+  document.getElementById('dp-pagamento').value = valor;
+  document.querySelectorAll('#dp-pagamento-botoes .forma-btn').forEach(b => b.classList.remove('selecionada'));
+  botaoClicado.classList.add('selecionada');
+  document.getElementById('dp-cliente-wrap').style.display = valor === 'fiado' ? 'block' : 'none';
 }
 
 async function finalizarPedido(id){
