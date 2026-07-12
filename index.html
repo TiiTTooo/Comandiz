@@ -187,6 +187,7 @@
     <button class="nav-btn" data-aba="cardapio" onclick="trocarAba('cardapio')">📋 Cardápio</button>
     <button class="nav-btn" data-aba="estoque" onclick="trocarAba('estoque')">📦 Estoque</button>
     <button class="nav-btn" data-aba="despesas" onclick="trocarAba('despesas')">💸 Despesas</button>
+    <button class="nav-btn" data-aba="fiados" onclick="trocarAba('fiados')">📒 Fiados</button>
     <button class="nav-btn" data-aba="fornecedores" onclick="trocarAba('fornecedores')">🚚 Fornecedores</button>
     <button class="nav-btn" data-aba="relatorios" onclick="trocarAba('relatorios')">📊 Relatórios</button>
     <button class="nav-btn" data-aba="usuarios" onclick="trocarAba('usuarios')">👥 Usuários</button>
@@ -257,6 +258,19 @@
         <table>
           <thead><tr><th>Data</th><th>Fornecedor</th><th>Valor</th><th>Pagamento</th></tr></thead>
           <tbody id="despesas-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FIADOS -->
+    <section id="sec-fiados" style="display:none;">
+      <h1>Fiados</h1>
+      <div class="stats-row" id="fiados-stats"></div>
+      <button class="btn" onclick="abrirModalCliente()">+ Novo cliente</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th>Cliente</th><th>Telefone</th><th>Devido</th><th>Pago</th><th>Saldo</th><th></th></tr></thead>
+          <tbody id="fiados-tabela"></tbody>
         </table>
       </div>
     </section>
@@ -332,6 +346,7 @@ let meuPerfil = null;
 let cardapioCache = [];
 let insumosCache = [];
 let fornecedoresCache = [];
+let clientesCache = [];
 let itensNovoPedido = [];
 let canalDeliveryPedidoAberto = null;
 
@@ -528,7 +543,7 @@ async function entrarNoApp(){
   document.getElementById('app').style.display = 'flex';
   const { data: loja } = await db.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
   document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
-  await Promise.all([carregarCardapioCache(), carregarFornecedoresCache()]);
+  await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
   assinarRealtimeCozinha();
 }
@@ -549,6 +564,7 @@ function trocarAba(aba){
   if(aba === 'cardapio') carregarProdutos();
   if(aba === 'estoque') carregarInsumos();
   if(aba === 'despesas') carregarDespesas();
+  if(aba === 'fiados') carregarFiados();
   if(aba === 'fornecedores') carregarFornecedores();
   if(aba === 'usuarios') carregarUsuarios();
 }
@@ -566,6 +582,18 @@ function mostrarToast(msg, tipo){
 
 function formatarReais(v){
   return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Usado quando um texto do usuário (ex: nome de cliente) vira argumento dentro
+// de um onclick="..." gerado via innerHTML. Precisa escapar em 2 camadas:
+// 1) pra não quebrar a string JS de aspas simples ao redor do argumento;
+// 2) pra não quebrar o atributo HTML de aspas duplas que envolve o onclick
+//    inteiro (um nome com " dentro, tipo Zé "Rei do Fiado", quebraria o HTML).
+function escJs(str){
+  return String(str == null ? '' : str)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
 }
 
 function fecharModal(){
@@ -638,7 +666,7 @@ async function carregarProdutos(){
     .select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   if(error){ mostrarToast('Erro ao carregar produtos: ' + error.message, 'erro'); return; }
   _cacheTodosProdutos = data || [];
-  const corpo = document.querySelector('#produtos-tabela tbody');
+  const corpo = document.getElementById('produtos-tabela');
   corpo.innerHTML = (data || []).map((p, i) => (
     '<tr><td class="ordem-btns">' +
       (i > 0 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'cima\')">▲</button>' : '') +
@@ -706,7 +734,7 @@ async function carregarPedidos(){
     .neq('status', 'cancelado')
     .order('criado_em', { ascending: false }).limit(50);
   if(error){ mostrarToast('Erro ao carregar pedidos: ' + error.message, 'erro'); return; }
-  document.querySelector('#pedidos-tabela tbody').innerHTML = (data || []).map(p => (
+  document.getElementById('pedidos-tabela').innerHTML = (data || []).map(p => (
     '<tr><td>#' + p.id + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
     '<td><span class="badge badge-' + p.status + '">' + p.status + '</span></td>' +
     '<td>' + formatarReais(p.total) + '</td>' +
@@ -800,8 +828,19 @@ async function abrirDetalhePedido(id){
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
     (finalizavel ? (
       '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
-      '<select id="dp-pagamento"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option>' +
-      '<option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
+      '<select id="dp-pagamento" onchange="document.getElementById(\'dp-cliente-wrap\').style.display = this.value===\'fiado\'?\'block\':\'none\'">' +
+      '<option value="dinheiro">Dinheiro</option><option value="pix">Pix</option>' +
+      '<option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option>' +
+      '<option value="fiado">Fiado (fica devendo)</option></select>' +
+      '<div id="dp-cliente-wrap" style="display:none;">' +
+        '<label>Cliente (pra quem vai o fiado)</label>' +
+        '<select id="dp-cliente" onchange="document.getElementById(\'dp-cliente-novo-wrap\').style.display = this.value===\'__novo__\'?\'block\':\'none\'">' +
+          '<option value="">Selecione...</option>' +
+          clientesCache.map(c => '<option value="' + c.id + '">' + c.nome + '</option>').join('') +
+          '<option value="__novo__">+ Novo cliente</option>' +
+        '</select>' +
+        '<div id="dp-cliente-novo-wrap" style="display:none;"><input type="text" id="dp-cliente-novo" placeholder="Nome do novo cliente"></div>' +
+      '</div>' +
       '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(' + pedido.id + ')">Fechar e receber pagamento</button>' +
       '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ')">Cancelar pedido</button>'
     ) : '')
@@ -810,11 +849,30 @@ async function abrirDetalhePedido(id){
 
 async function finalizarPedido(id){
   const forma_pagamento = document.getElementById('dp-pagamento').value;
+  let cliente_id = null;
+
+  if(forma_pagamento === 'fiado'){
+    const selecionado = document.getElementById('dp-cliente').value;
+    if(selecionado === '__novo__'){
+      const nome = document.getElementById('dp-cliente-novo').value.trim();
+      if(!nome){ mostrarToast('Digite o nome do cliente pra registrar o fiado.', 'erro'); return; }
+      const { data: novoCliente, error: eCli } = await db.from('clientes')
+        .insert({ loja_id: meuPerfil.loja_id, nome }).select().single();
+      if(eCli){ mostrarToast('Erro ao cadastrar cliente: ' + eCli.message, 'erro'); return; }
+      cliente_id = novoCliente.id;
+      clientesCache.push(novoCliente);
+    } else if(selecionado){
+      cliente_id = Number(selecionado);
+    } else {
+      mostrarToast('Selecione o cliente pra registrar o fiado.', 'erro'); return;
+    }
+  }
+
   const { error } = await db.from('pedidos')
-    .update({ status: 'finalizado', forma_pagamento, fechado_em: new Date().toISOString() })
+    .update({ status: 'finalizado', forma_pagamento, cliente_id, fechado_em: new Date().toISOString() })
     .eq('id', id);
   if(error){ mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
-  mostrarToast('Pedido #' + id + ' fechado!', 'sucesso');
+  mostrarToast(forma_pagamento === 'fiado' ? 'Pedido #' + id + ' fechado no fiado!' : 'Pedido #' + id + ' fechado!', 'sucesso');
   fecharModal(); carregarPedidos(); carregarInicio();
 }
 
@@ -842,7 +900,8 @@ async function carregarCozinha(){
       '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? i.produtos.nome : '?') + '</li>').join('') + '</ul>' +
       (p.status === 'aberto'
         ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
-        : '<span class="badge badge-pronto">Pronto — aguardando fechamento</span>')
+        : '<span class="badge badge-pronto">Pronto</span>' +
+          '<button class="btn" style="width:100%;margin-top:8px;" onclick="abrirDetalhePedido(' + p.id + ')">Entregar / Fechar pedido</button>')
     + '</div>'
   )).join('') || '<p style="color:var(--cor-texto-suave);">Nenhum pedido em preparo agora.</p>';
 }
@@ -867,7 +926,7 @@ async function carregarInsumos(){
   const { data, error } = await db.from('estoque_saldo').select('*').eq('loja_id', meuPerfil.loja_id).order('nome');
   if(error){ mostrarToast('Erro ao carregar estoque: ' + error.message, 'erro'); return; }
   insumosCache = data || [];
-  document.querySelector('#insumos-tabela tbody').innerHTML = insumosCache.map(i => (
+  document.getElementById('insumos-tabela').innerHTML = insumosCache.map(i => (
     '<tr><td>' + i.nome + '</td><td>' + i.unidade_medida + '</td><td>' + i.saldo + '</td>' +
     '<td><span class="badge badge-' + i.status_estoque.toLowerCase().replace('é','e') + '">' + i.status_estoque + '</span></td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalMovimento(' + i.insumo_id + ')">Lançar</button></td></tr>'
@@ -942,7 +1001,7 @@ async function carregarFornecedoresCache(){
 async function carregarFornecedores(){
   const { data, error } = await db.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   if(error){ mostrarToast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
-  document.querySelector('#fornecedores-tabela tbody').innerHTML = (data || []).map((f, i) => (
+  document.getElementById('fornecedores-tabela').innerHTML = (data || []).map((f, i) => (
     '<tr><td class="ordem-btns">' +
       (i > 0 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'cima\')">▲</button>' : '') +
       (i < data.length - 1 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'baixo\')">▼</button>' : '') +
@@ -992,6 +1051,82 @@ async function moverOrdemFornecedor(id, direcao){
 }
 
 // =========================================================================
+// FIADOS (clientes + saldo devedor)
+// =========================================================================
+async function carregarClientesCache(){
+  const { data, error } = await db.from('clientes').select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('nome');
+  if(error){ mostrarToast('Erro ao carregar clientes: ' + error.message, 'erro'); return; }
+  clientesCache = data || [];
+}
+
+async function carregarFiados(){
+  const { data, error } = await db.from('fiado_saldo').select('*').eq('loja_id', meuPerfil.loja_id).order('nome');
+  if(error){ mostrarToast('Erro ao carregar fiados: ' + error.message, 'erro'); return; }
+  const devendo = (data || []).filter(c => Number(c.saldo) > 0);
+  const totalEmAberto = devendo.reduce((s,c) => s + Number(c.saldo), 0);
+  document.getElementById('fiados-stats').innerHTML =
+    statCard('Total em aberto', formatarReais(totalEmAberto)) +
+    statCard('Clientes devendo', devendo.length);
+  document.getElementById('fiados-tabela').innerHTML = (data || []).map(c => (
+    '<tr><td>' + c.nome + '</td><td>' + (c.telefone || '—') + '</td>' +
+    '<td>' + formatarReais(c.devido) + '</td><td>' + formatarReais(c.pago) + '</td>' +
+    '<td style="font-weight:700;' + (Number(c.saldo) > 0 ? 'color:#c0392b;' : '') + '">' + formatarReais(c.saldo) + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalPagamentoFiado(' + c.cliente_id + ',\'' + escJs(c.nome) + '\')">Registrar pagamento</button></td></tr>'
+  )).join('') || '<tr><td colspan="6" style="color:var(--cor-texto-suave);">Nenhum cliente com fiado registrado ainda.</td></tr>';
+}
+
+function abrirModalCliente(){
+  abrirModal(
+    '<h2>Novo cliente</h2>' +
+    '<form id="form-cliente">' +
+      '<label>Nome</label><input type="text" id="cli-nome" required>' +
+      '<label>Telefone (opcional)</label><input type="text" id="cli-telefone">' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-cliente').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await db.from('clientes').insert({
+      loja_id: meuPerfil.loja_id,
+      nome: document.getElementById('cli-nome').value.trim(),
+      telefone: document.getElementById('cli-telefone').value.trim() || null
+    });
+    if(error){ mostrarToast('Erro ao salvar cliente: ' + error.message, 'erro'); return; }
+    mostrarToast('Cliente cadastrado!', 'sucesso');
+    fecharModal(); await carregarClientesCache(); carregarFiados();
+  });
+}
+
+function abrirModalPagamentoFiado(clienteId, nomeCliente){
+  abrirModal(
+    '<h2>Registrar pagamento — ' + nomeCliente + '</h2>' +
+    '<form id="form-pagamento-fiado">' +
+      '<label>Valor pago (R$)</label><input type="number" step="0.01" min="0.01" id="pg-valor" required>' +
+      '<label>Forma de pagamento</label>' +
+      '<select id="pg-forma"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option>' +
+      '<option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
+      '<label>Data</label><input type="date" id="pg-data" value="' + new Date().toISOString().slice(0,10) + '">' +
+      '<label>Observação (opcional)</label><input type="text" id="pg-obs">' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Registrar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-pagamento-fiado').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await db.from('fiado_pagamentos').insert({
+      loja_id: meuPerfil.loja_id,
+      cliente_id: clienteId,
+      valor: Number(document.getElementById('pg-valor').value),
+      forma_pagamento: document.getElementById('pg-forma').value,
+      data: document.getElementById('pg-data').value,
+      observacao: document.getElementById('pg-obs').value.trim() || null
+    });
+    if(error){ mostrarToast('Erro ao registrar pagamento: ' + error.message, 'erro'); return; }
+    mostrarToast('Pagamento registrado!', 'sucesso');
+    fecharModal(); carregarFiados();
+  });
+}
+
+// =========================================================================
 // DESPESAS
 // =========================================================================
 async function carregarDespesas(){
@@ -999,7 +1134,7 @@ async function carregarDespesas(){
     .select('*, fornecedores(nome)').eq('loja_id', meuPerfil.loja_id)
     .order('data', { ascending: false }).limit(100);
   if(error){ mostrarToast('Erro ao carregar despesas: ' + error.message, 'erro'); return; }
-  document.querySelector('#despesas-tabela tbody').innerHTML = (data || []).map(d => (
+  document.getElementById('despesas-tabela').innerHTML = (data || []).map(d => (
     '<tr><td>' + new Date(d.data).toLocaleDateString('pt-BR') + '</td>' +
     '<td>' + (d.fornecedores ? d.fornecedores.nome : '—') + '</td>' +
     '<td>' + formatarReais(d.valor) + '</td><td>' + (d.forma_pagamento || '—') + '</td></tr>'
@@ -1058,10 +1193,18 @@ async function carregarRelatorio(){
   const porForma = {};
   (pedidos || []).forEach(p => { porForma[p.forma_pagamento] = (porForma[p.forma_pagamento] || 0) + Number(p.total); });
 
+  // Fiado entra no "vendido" (o produto saiu), mas NÃO é dinheiro que entrou no
+  // caixa ainda — por isso separamos "vendido" de "recebido em caixa" abaixo,
+  // senão o Líquido ficaria inflado com dinheiro que ainda não chegou.
+  const totalFiado = porForma['fiado'] || 0;
+  const recebidoCaixa = totalVendas - totalFiado;
+
   let html = statCard('Total vendido', formatarReais(totalVendas)) +
+             statCard('Recebido em caixa', formatarReais(recebidoCaixa)) +
+             statCard('Fiado (a receber)', formatarReais(totalFiado)) +
              statCard('Total despesas', formatarReais(totalDespesas)) +
-             statCard('Líquido', formatarReais(totalVendas - totalDespesas));
-  Object.keys(porForma).forEach(forma => { html += statCard(forma, formatarReais(porForma[forma])); });
+             statCard('Líquido em caixa', formatarReais(recebidoCaixa - totalDespesas));
+  Object.keys(porForma).filter(forma => forma !== 'fiado').forEach(forma => { html += statCard(forma, formatarReais(porForma[forma])); });
   document.getElementById('relatorio-stats').innerHTML = html;
 }
 
@@ -1071,13 +1214,13 @@ async function carregarRelatorio(){
 async function carregarUsuarios(){
   const { data: membros, error: e1 } = await db.from('perfis').select('nome, email, role').eq('loja_id', meuPerfil.loja_id);
   if(e1){ mostrarToast('Erro ao carregar usuários: ' + e1.message, 'erro'); return; }
-  document.querySelector('#membros-tabela tbody').innerHTML = (membros || []).map(m => (
+  document.getElementById('membros-tabela').innerHTML = (membros || []).map(m => (
     '<tr><td>' + (m.nome || '—') + '</td><td>' + m.email + '</td><td>' + m.role + '</td></tr>'
   )).join('');
 
   const { data: convites, error: e2 } = await db.from('convites').select('*').eq('loja_id', meuPerfil.loja_id).eq('usado', false);
   if(e2){ mostrarToast('Erro ao carregar convites: ' + e2.message, 'erro'); return; }
-  document.querySelector('#convites-tabela tbody').innerHTML = (convites || []).map(c => (
+  document.getElementById('convites-tabela').innerHTML = (convites || []).map(c => (
     '<tr><td>' + c.email + '</td><td>' + c.role + '</td></tr>'
   )).join('') || '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum convite pendente.</td></tr>';
 }
