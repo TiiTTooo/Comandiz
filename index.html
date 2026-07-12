@@ -30,9 +30,11 @@
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
   .config-swatches-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
-  .relogio-fixo{position:fixed;top:16px;right:24px;z-index:50;background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:10px 20px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.08);}
-  .relogio-hora{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px;color:var(--cor-primaria);line-height:1.2;}
-  .relogio-data{font-size:12px;color:var(--cor-texto-suave);text-transform:capitalize;margin-top:2px;}
+  .topbar{position:fixed;top:0;left:0;right:0;height:56px;background:var(--cor-card);border-bottom:1px solid var(--cor-borda);z-index:60;display:flex;align-items:center;padding:0 24px;box-sizing:border-box;}
+  .topbar-loja{position:absolute;left:50%;transform:translateX(-50%);font-size:16px;font-weight:700;color:var(--cor-texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:60%;}
+  .topbar-relogio{margin-left:auto;text-align:right;line-height:1.15;}
+  .relogio-hora{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.3px;color:var(--cor-primaria);line-height:1.2;}
+  .relogio-data{font-size:11px;color:var(--cor-texto-suave);text-transform:capitalize;margin-top:1px;}
   .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
   .config-swatch.selecionado{border-color:var(--cor-texto);}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
@@ -65,7 +67,7 @@
   .auth-convite{font-size:12px;color:var(--cor-primaria);background:#fff3ec;border:1px solid var(--cor-primaria);border-radius:8px;padding:8px 10px;margin:4px 0 10px;}
 
   /* ---------- App principal ---------- */
-  #app{display:flex;min-height:100vh;}
+  #app{display:flex;min-height:calc(100vh - 56px);margin-top:56px;}
   #sidebar{width:220px;background:#1f1b16;color:#fff;padding:18px 12px;flex-shrink:0;}
   #sidebar h2{font-size:20px;margin:4px 8px 20px;color:#fff;}
   #sidebar .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:#d8d2c9;padding:11px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
@@ -105,7 +107,11 @@
     #sidebar h2, #sidebar .loja-nome{display:none;}
     #sidebar .nav-btn{width:auto;flex:1;min-width:90px;text-align:center;font-size:12px;padding:8px 6px;}
     #sidebar .sair{width:100%;margin-top:8px;border-top:none;padding-top:0;order:99;}
-    .relogio-fixo{position:static;top:auto;right:auto;width:100%;box-sizing:border-box;margin-bottom:8px;border-radius:0;}
+    .topbar{padding:0 10px;}
+    .topbar-loja{font-size:12px;max-width:34%;}
+    .topbar-relogio{max-width:40%;}
+    .relogio-hora{font-size:12px;}
+    .relogio-data{font-size:8px;line-height:1.25;white-space:normal;}
   }
 </style>
 </head>
@@ -193,11 +199,14 @@
 </div>
 
 <!-- ============== APP PRINCIPAL ============== -->
-<div id="app" style="display:none;">
-  <div class="relogio-fixo" id="relogio-fixo">
+<div class="topbar" id="topbar" style="display:none;">
+  <div class="topbar-loja" id="topbar-loja-nome">—</div>
+  <div class="topbar-relogio" id="relogio-fixo">
     <div class="relogio-hora" id="relogio-hora">--:--:--</div>
     <div class="relogio-data" id="relogio-data">—</div>
   </div>
+</div>
+<div id="app" style="display:none;">
   <nav id="sidebar">
     <h2>Comandiz</h2>
     <div class="loja-nome" id="sidebar-loja-nome">—</div>
@@ -446,6 +455,7 @@ async function iniciar(){
   db.auth.onAuthStateChange((evento) => {
     if(evento === 'PASSWORD_RECOVERY'){
       document.getElementById('app').style.display = 'none';
+      document.getElementById('topbar').style.display = 'none';
       document.getElementById('tela-onboarding').style.display = 'none';
       document.getElementById('tela-auth').style.display = 'flex';
       trocarAbaAuth('nova-senha');
@@ -618,8 +628,10 @@ async function criarLoja(){
 
 async function entrarNoApp(){
   document.getElementById('app').style.display = 'flex';
+  document.getElementById('topbar').style.display = 'flex';
   const { data: loja } = await db.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
   document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
+  document.getElementById('topbar-loja-nome').textContent = loja ? loja.nome : '';
   document.getElementById('nav-master').style.display = meuPerfil.is_admin ? 'block' : 'none';
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
@@ -1684,6 +1696,7 @@ async function carregarMinhaLoja(){
     if(eSalvar){ mostrarToast('Erro ao salvar: ' + eSalvar.message, 'erro'); return; }
     mostrarToast('Dados da loja atualizados!', 'sucesso');
     document.getElementById('sidebar-loja-nome').textContent = registro.nome;
+    document.getElementById('topbar-loja-nome').textContent = registro.nome;
   };
 }
 
