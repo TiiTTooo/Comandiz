@@ -67,10 +67,10 @@
   #sidebar .nav-btn.ativo{background:var(--cor-primaria);color:#fff;}
   #sidebar .loja-nome{font-size:12px;color:#9c9488;padding:0 8px 14px;border-bottom:1px solid #3a332a;margin-bottom:10px;}
   #sidebar .sair{margin-top:20px;border-top:1px solid #3a332a;padding-top:14px;}
-  #conteudo{flex:1;padding:24px;max-width:1100px;}
+  #conteudo{flex:1;padding:24px;max-width:1600px;width:100%;box-sizing:border-box;}
   #conteudo h1{font-size:22px;margin:0 0 18px;}
   .stats-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;}
-  .stat{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px 18px;flex:1;min-width:150px;}
+  .stat{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px 18px;flex:1;min-width:150px;max-width:260px;}
   .stat .valor{font-size:24px;font-weight:700;}
   .stat .rotulo{font-size:12px;color:var(--cor-texto-suave);text-transform:uppercase;}
 
@@ -200,6 +200,8 @@
     <button class="nav-btn" data-aba="fornecedores" onclick="trocarAba('fornecedores')">🚚 Fornecedores</button>
     <button class="nav-btn" data-aba="relatorios" onclick="trocarAba('relatorios')">📊 Relatórios</button>
     <button class="nav-btn" data-aba="usuarios" onclick="trocarAba('usuarios')">👥 Usuários</button>
+    <button class="nav-btn" data-aba="minha-loja" onclick="trocarAba('minha-loja')">🏪 Minha Loja</button>
+    <button class="nav-btn" data-aba="master" id="nav-master" onclick="trocarAba('master')" style="display:none;">🛡️ Master</button>
     <div class="sair">
       <button class="nav-btn" onclick="sair()">🚪 Sair</button>
     </div>
@@ -211,6 +213,16 @@
     <section id="sec-inicio">
       <h1>Início</h1>
       <div class="stats-row" id="inicio-stats"></div>
+      <div class="cartao">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <strong>Vendas x despesas — últimos 7 dias</strong>
+          <div style="font-size:12px;color:var(--cor-texto-suave);display:flex;gap:14px;">
+            <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-primaria);border-radius:2px;margin-right:5px;"></span>Vendido</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-vermelho);border-radius:2px;margin-right:5px;"></span>Despesas</span>
+          </div>
+        </div>
+        <canvas id="inicio-grafico" style="width:100%;height:220px;margin-top:10px;"></canvas>
+      </div>
       <div class="cartao">
         <strong>Insumos com estoque baixo</strong>
         <table id="inicio-estoque-baixo"><tbody></tbody></table>
@@ -300,9 +312,16 @@
     <section id="sec-relatorios" style="display:none;">
       <h1>Relatórios</h1>
       <div class="cartao">
-        <div class="linha">
-          <div><label>De</label><input type="date" id="rel-inicio"></div>
-          <div><label>Até</label><input type="date" id="rel-fim"></div>
+        <label>Período rápido</label>
+        <div class="forma-pagamento-botoes" id="rel-atalhos">
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoRelatorio('hoje', this)">Hoje</button>
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoRelatorio('ontem', this)">Ontem</button>
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoRelatorio('semana', this)">Últimos 7 dias</button>
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoRelatorio('mes', this)">Este mês</button>
+        </div>
+        <div class="linha" style="margin-top:14px;">
+          <div><label>De</label><input type="date" id="rel-inicio" oninput="limparAtalhoRelatorioSelecionado()"></div>
+          <div><label>Até</label><input type="date" id="rel-fim" oninput="limparAtalhoRelatorioSelecionado()"></div>
           <div style="display:flex;align-items:flex-end;"><button class="btn" onclick="carregarRelatorio()">Gerar</button></div>
         </div>
       </div>
@@ -325,6 +344,42 @@
         <table>
           <thead><tr><th>E-mail</th><th>Papel</th></tr></thead>
           <tbody id="convites-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- MINHA LOJA -->
+    <section id="sec-minha-loja" style="display:none;">
+      <h1>Minha Loja</h1>
+      <div class="cartao">
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <img id="ml-logo-preview" src="" alt="Logo da loja" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--cor-borda);background:#fff;display:none;">
+            <div id="ml-logo-vazio" style="width:120px;height:120px;border-radius:12px;border:1px dashed var(--cor-borda);display:flex;align-items:center;justify-content:center;color:var(--cor-texto-suave);font-size:12px;text-align:center;">Sem logo</div>
+            <label style="margin-top:10px;">Trocar logo</label>
+            <input type="file" id="ml-logo-input" accept="image/*" onchange="enviarLogoLoja(this.files[0])">
+            <div id="ml-logo-status" style="font-size:12px;color:var(--cor-texto-suave);margin-top:4px;"></div>
+          </div>
+          <form id="form-minha-loja" style="flex:1;min-width:260px;">
+            <label>Nome da loja</label><input type="text" id="ml-nome" required>
+            <label>Cidade</label><input type="text" id="ml-cidade">
+            <label>Endereço</label><input type="text" id="ml-endereco">
+            <label>Telefone</label><input type="text" id="ml-tel">
+            <label>CNPJ (opcional)</label><input type="text" id="ml-cnpj">
+            <button type="submit" class="btn" style="width:100%;margin-top:16px;" id="ml-btn-salvar">Salvar alterações</button>
+            <div id="ml-aviso-somente-dono" style="display:none;color:var(--cor-texto-suave);font-size:13px;margin-top:10px;">Só o dono da loja pode editar esses dados.</div>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- MASTER (só aparece pra conta administradora) -->
+    <section id="sec-master" style="display:none;">
+      <h1>Master — todas as lojas</h1>
+      <div class="cartao">
+        <table>
+          <thead><tr><th>Loja</th><th>Cidade</th><th>Telefone</th><th>Membros</th><th>Pedidos</th><th>Status</th><th>Criada em</th><th></th></tr></thead>
+          <tbody id="master-tabela"></tbody>
         </table>
       </div>
     </section>
@@ -552,6 +607,7 @@ async function entrarNoApp(){
   document.getElementById('app').style.display = 'flex';
   const { data: loja } = await db.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
   document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
+  document.getElementById('nav-master').style.display = meuPerfil.is_admin ? 'block' : 'none';
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
   assinarRealtimeCozinha();
@@ -576,6 +632,8 @@ function trocarAba(aba){
   if(aba === 'fiados') carregarFiados();
   if(aba === 'fornecedores') carregarFornecedores();
   if(aba === 'usuarios') carregarUsuarios();
+  if(aba === 'minha-loja') carregarMinhaLoja();
+  if(aba === 'master') carregarMaster();
 }
 
 // =========================================================================
@@ -618,24 +676,46 @@ function abrirModal(htmlConteudo){
 // =========================================================================
 // INÍCIO / DASHBOARD
 // =========================================================================
-async function carregarInicio(){
-  const hoje = new Date().toISOString().slice(0,10);
+// Data no fuso do navegador (não UTC) — usar toISOString() pra "hoje" desalinha
+// o dia perto da meia-noite, já que o Brasil está atrás do UTC (ex: 21h de
+// terça em SP já é quarta em UTC, e "vendido hoje" contaria errado).
+function dataLocalISO(d){
+  const dt = (d instanceof Date) ? d : new Date(d);
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
 
-  const { data: pedidosHoje, error: e1 } = await db.from('pedidos')
-    .select('total, forma_pagamento, status')
+async function carregarInicio(){
+  const agora = new Date();
+  const hojeStr = dataLocalISO(agora);
+  const inicioSemana = new Date(agora);
+  inicioSemana.setDate(inicioSemana.getDate() - 6);
+  const inicioSemanaStr = dataLocalISO(inicioSemana);
+
+  const { data: pedidosSemana, error: e1 } = await db.from('pedidos')
+    .select('total, forma_pagamento, status, criado_em')
     .eq('loja_id', meuPerfil.loja_id)
-    .gte('criado_em', hoje + 'T00:00:00')
-    .lte('criado_em', hoje + 'T23:59:59');
+    .gte('criado_em', inicioSemanaStr + 'T00:00:00')
+    .lte('criado_em', hojeStr + 'T23:59:59');
   if(e1){ mostrarToast('Erro ao carregar início: ' + e1.message, 'erro'); return; }
 
-  const finalizados = (pedidosHoje || []).filter(p => p.status === 'finalizado');
-  const totalHoje = finalizados.reduce((s,p) => s + Number(p.total), 0);
-  const abertos = (pedidosHoje || []).filter(p => p.status === 'aberto' || p.status === 'pronto').length;
+  const pedidosHoje = (pedidosSemana || []).filter(p => dataLocalISO(p.criado_em) === hojeStr);
+  const finalizadosHoje = pedidosHoje.filter(p => p.status === 'finalizado');
+  const totalHoje = finalizadosHoje.reduce((s,p) => s + Number(p.total), 0);
+  const abertos = pedidosHoje.filter(p => p.status === 'aberto' || p.status === 'pronto').length;
+
+  const finalizadosSemana = (pedidosSemana || []).filter(p => p.status === 'finalizado');
+  const vendidoSemana = finalizadosSemana.reduce((s,p) => s + Number(p.total), 0);
+
+  const { data: despesasSemana } = await db.from('despesas')
+    .select('valor, data')
+    .eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicioSemanaStr);
+  const despesasSemanaTotal = (despesasSemana || []).reduce((s,d) => s + Number(d.valor), 0);
 
   const { data: despesasMes } = await db.from('despesas')
     .select('valor')
     .eq('loja_id', meuPerfil.loja_id)
-    .gte('data', hoje.slice(0,7) + '-01');
+    .gte('data', hojeStr.slice(0,7) + '-01');
   const totalDespesasMes = (despesasMes || []).reduce((s,d) => s + Number(d.valor), 0);
 
   const { data: estoqueBaixo } = await db.from('estoque_saldo')
@@ -643,7 +723,10 @@ async function carregarInicio(){
 
   document.getElementById('inicio-stats').innerHTML =
     statCard('Vendido hoje', formatarReais(totalHoje)) +
+    statCard('Pedidos finalizados hoje', finalizadosHoje.length) +
     statCard('Pedidos em aberto', abertos) +
+    statCard('Vendido — 7 dias', formatarReais(vendidoSemana)) +
+    statCard('Despesas — 7 dias', formatarReais(despesasSemanaTotal)) +
     statCard('Despesas do mês', formatarReais(totalDespesasMes)) +
     statCard('Insumos em estoque baixo', (estoqueBaixo || []).length);
 
@@ -651,6 +734,67 @@ async function carregarInicio(){
   corpo.innerHTML = (estoqueBaixo || []).length
     ? estoqueBaixo.map(i => '<tr><td>' + i.nome + '</td><td>' + i.saldo + ' ' + i.unidade_medida + '</td></tr>').join('')
     : '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum insumo abaixo do nível mínimo 🎉</td></tr>';
+
+  // Monta os dados dia a dia (últimos 7 dias, do mais antigo pro mais recente) pro gráfico
+  const dias = [];
+  for(let i = 6; i >= 0; i--){
+    const d = new Date(agora);
+    d.setDate(d.getDate() - i);
+    dias.push(dataLocalISO(d));
+  }
+  const vendasPorDia = {};
+  finalizadosSemana.forEach(p => {
+    const dia = dataLocalISO(p.criado_em);
+    vendasPorDia[dia] = (vendasPorDia[dia] || 0) + Number(p.total);
+  });
+  const despesasPorDia = {};
+  (despesasSemana || []).forEach(d => { despesasPorDia[d.data] = (despesasPorDia[d.data] || 0) + Number(d.valor); });
+
+  const dadosGrafico = dias.map(dia => ({
+    rotulo: new Date(dia + 'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
+    vendas: vendasPorDia[dia] || 0,
+    despesas: despesasPorDia[dia] || 0
+  }));
+  desenharGraficoSemana(dadosGrafico);
+}
+
+function desenharGraficoSemana(dados){
+  const canvas = document.getElementById('inicio-grafico');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const larguraCss = canvas.clientWidth || canvas.parentElement.clientWidth || 600;
+  const alturaCss = 220;
+  canvas.width = larguraCss;
+  canvas.height = alturaCss;
+  ctx.clearRect(0, 0, larguraCss, alturaCss);
+
+  const maiorValor = Math.max(1, ...dados.map(d => Math.max(d.vendas, d.despesas)));
+  const margemBaixo = 26, margemCima = 12;
+  const alturaUtil = alturaCss - margemBaixo - margemCima;
+  const larguraGrupo = larguraCss / dados.length;
+  const larguraBarra = Math.min(26, larguraGrupo / 3.4);
+
+  const corVendas = getComputedStyle(document.documentElement).getPropertyValue('--cor-primaria').trim() || '#e8590c';
+  const corDespesas = getComputedStyle(document.documentElement).getPropertyValue('--cor-vermelho').trim() || '#d63939';
+
+  ctx.font = '11px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#6b6b6b';
+
+  dados.forEach((d, i) => {
+    const centroX = larguraGrupo * i + larguraGrupo / 2;
+    const alturaVendas = (d.vendas / maiorValor) * alturaUtil;
+    const alturaDespesas = (d.despesas / maiorValor) * alturaUtil;
+
+    ctx.fillStyle = corVendas;
+    ctx.fillRect(centroX - larguraBarra - 2, alturaCss - margemBaixo - alturaVendas, larguraBarra, alturaVendas);
+
+    ctx.fillStyle = corDespesas;
+    ctx.fillRect(centroX + 2, alturaCss - margemBaixo - alturaDespesas, larguraBarra, alturaDespesas);
+
+    ctx.fillStyle = '#6b6b6b';
+    ctx.fillText(d.rotulo, centroX, alturaCss - 8);
+  });
 }
 
 function statCard(rotulo, valor){
@@ -680,7 +824,7 @@ async function carregarProdutos(){
     '<tr><td class="ordem-btns">' +
       (i > 0 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'cima\')">▲</button>' : '') +
       (i < data.length - 1 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'baixo\')">▼</button>' : '') +
-    '</td><td>' + p.nome + '</td><td>' + (p.categoria || '—') + '</td><td>' + formatarReais(p.preco_venda) + '</td>' +
+    '</td><td>' + p.nome + '</td><td>' + (p.categoria ? emojiCategoria(p.categoria) + ' ' + p.categoria : '—') + '</td><td>' + formatarReais(p.preco_venda) + '</td>' +
     '<td>' + (p.ativo ? '✅' : '—') + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalProduto(' + p.id + ')">Editar</button></td></tr>'
   )).join('') || '<tr><td colspan="6" style="color:var(--cor-texto-suave);">Nenhum produto cadastrado ainda.</td></tr>';
@@ -791,6 +935,33 @@ function normalizarBusca(s){
   return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
+// Categoria \u00e9 texto livre (quem cadastra digita como quiser), ent\u00e3o aqui \u00e9
+// s\u00f3 um "melhor esfor\u00e7o": reconhece palavras comuns do segmento da loja e
+// cai num emoji gen\u00e9rico se n\u00e3o bater com nada.
+function emojiCategoria(categoria){
+  const c = normalizarBusca(categoria);
+  if(!c) return '';
+  const mapa = [
+    [['pastel'], '\ud83e\udd5f'],
+    [['pizza'], '\ud83c\udf55'],
+    [['feijoada'], '\ud83c\udf72'],
+    [['bebida','suco','refrigerante','refri','coca','guarana'], '\ud83e\udd64'],
+    [['cerveja','chopp'], '\ud83c\udf7a'],
+    [['agua'], '\ud83d\udca7'],
+    [['sobremesa','doce','pudim','sorvete'], '\ud83c\udf6e'],
+    [['salgado','coxinha','esfiha','empada'], '\ud83e\udd50'],
+    [['lanche','sanduiche','hamburguer','burguer','hot dog','hotdog'], '\ud83c\udf54'],
+    [['prato feito','prato','marmita'], '\ud83c\udf7d\ufe0f'],
+    [['combo'], '\ud83c\udf71'],
+    [['acompanhamento','porcao','por\u00e7\u00e3o'], '\ud83c\udf5f'],
+    [['molho'], '\ud83e\udd6b']
+  ];
+  for(const [chaves, emoji] of mapa){
+    if(chaves.some(chave => c.includes(normalizarBusca(chave)))) return emoji;
+  }
+  return '\ud83c\udf74';
+}
+
 function filtrarProdutosNovoPedido(termo){
   const termoNorm = normalizarBusca(termo);
   const lista = document.getElementById('np-produto-lista');
@@ -845,11 +1016,24 @@ function removerItemNovoPedido(produtoId){
   renderizarItensNovoPedido();
 }
 
+function editarQuantidadeItemNovoPedido(produtoId, novaQtd){
+  const qtd = Number(novaQtd);
+  const item = itensNovoPedido.find(i => i.produto_id === produtoId);
+  if(!item) return;
+  if(!qtd || qtd <= 0){ removerItemNovoPedido(produtoId); return; }
+  item.quantidade = qtd;
+  renderizarItensNovoPedido();
+}
+
 function renderizarItensNovoPedido(){
   const total = itensNovoPedido.reduce((s,i) => s + i.preco * i.quantidade, 0);
   document.getElementById('np-itens').innerHTML = itensNovoPedido.map(i => (
-    '<div class="item-linha"><span>' + i.quantidade + 'x ' + i.nome + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
-    '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.produto_id + ')">remover</button></div>'
+    '<div class="item-linha">' +
+      '<input type="number" min="1" value="' + i.quantidade + '" style="max-width:60px;" ' +
+        'onchange="editarQuantidadeItemNovoPedido(' + i.produto_id + ', this.value)">' +
+      '<span>' + i.nome + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
+      '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.produto_id + ')">remover</button>' +
+    '</div>'
   )).join('');
   document.getElementById('np-total').textContent = 'Total: ' + formatarReais(total);
 }
@@ -1249,6 +1433,33 @@ function abrirModalDespesa(){
 // =========================================================================
 // RELATÓRIOS
 // =========================================================================
+function aplicarAtalhoRelatorio(tipo, botaoClicado){
+  const hoje = new Date();
+  let inicio, fim;
+  if(tipo === 'hoje'){
+    inicio = fim = dataLocalISO(hoje);
+  } else if(tipo === 'ontem'){
+    const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1);
+    inicio = fim = dataLocalISO(ontem);
+  } else if(tipo === 'semana'){
+    const seteDiasAtras = new Date(hoje); seteDiasAtras.setDate(seteDiasAtras.getDate() - 6);
+    inicio = dataLocalISO(seteDiasAtras); fim = dataLocalISO(hoje);
+  } else if(tipo === 'mes'){
+    inicio = dataLocalISO(hoje).slice(0, 7) + '-01'; fim = dataLocalISO(hoje);
+  } else {
+    return;
+  }
+  document.getElementById('rel-inicio').value = inicio;
+  document.getElementById('rel-fim').value = fim;
+  document.querySelectorAll('#rel-atalhos .forma-btn').forEach(b => b.classList.remove('selecionada'));
+  botaoClicado.classList.add('selecionada');
+  carregarRelatorio();
+}
+
+function limparAtalhoRelatorioSelecionado(){
+  document.querySelectorAll('#rel-atalhos .forma-btn').forEach(b => b.classList.remove('selecionada'));
+}
+
 async function carregarRelatorio(){
   const inicio = document.getElementById('rel-inicio').value;
   const fim = document.getElementById('rel-fim').value;
@@ -1322,6 +1533,94 @@ function abrirModalConvite(){
     mostrarToast('Convite criado!', 'sucesso');
     fecharModal(); carregarUsuarios();
   });
+}
+
+// =========================================================================
+// MINHA LOJA (editar dados + logo)
+// =========================================================================
+async function carregarMinhaLoja(){
+  const { data: loja, error } = await db.from('lojas').select('*').eq('id', meuPerfil.loja_id).single();
+  if(error){ mostrarToast('Erro ao carregar dados da loja: ' + error.message, 'erro'); return; }
+
+  document.getElementById('ml-nome').value = loja.nome || '';
+  document.getElementById('ml-cidade').value = loja.cidade || '';
+  document.getElementById('ml-endereco').value = loja.endereco || '';
+  document.getElementById('ml-tel').value = loja.tel || '';
+  document.getElementById('ml-cnpj').value = loja.cnpj || '';
+
+  const preview = document.getElementById('ml-logo-preview');
+  const vazio = document.getElementById('ml-logo-vazio');
+  if(loja.logo_url){
+    preview.src = loja.logo_url + '?t=' + new Date().getTime(); // evita mostrar uma logo antiga em cache
+    preview.style.display = 'block';
+    vazio.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    vazio.style.display = 'flex';
+  }
+
+  const souDono = meuPerfil.role === 'dono';
+  ['ml-nome','ml-cidade','ml-endereco','ml-tel','ml-cnpj','ml-logo-input'].forEach(id => {
+    document.getElementById(id).disabled = !souDono;
+  });
+  document.getElementById('ml-btn-salvar').style.display = souDono ? 'block' : 'none';
+  document.getElementById('ml-aviso-somente-dono').style.display = souDono ? 'none' : 'block';
+
+  document.getElementById('form-minha-loja').onsubmit = async (e) => {
+    e.preventDefault();
+    const registro = {
+      nome: document.getElementById('ml-nome').value.trim(),
+      cidade: document.getElementById('ml-cidade').value.trim(),
+      endereco: document.getElementById('ml-endereco').value.trim(),
+      tel: document.getElementById('ml-tel').value.trim(),
+      cnpj: document.getElementById('ml-cnpj').value.trim()
+    };
+    const { error: eSalvar } = await db.from('lojas').update(registro).eq('id', meuPerfil.loja_id);
+    if(eSalvar){ mostrarToast('Erro ao salvar: ' + eSalvar.message, 'erro'); return; }
+    mostrarToast('Dados da loja atualizados!', 'sucesso');
+    document.getElementById('sidebar-loja-nome').textContent = registro.nome;
+  };
+}
+
+async function enviarLogoLoja(arquivo){
+  if(!arquivo) return;
+  const status = document.getElementById('ml-logo-status');
+  status.textContent = 'Enviando...';
+  const extensao = (arquivo.name.split('.').pop() || 'png').toLowerCase();
+  const caminho = meuPerfil.loja_id + '/logo.' + extensao;
+
+  const { error: eUpload } = await db.storage.from('logos').upload(caminho, arquivo, { upsert: true });
+  if(eUpload){ status.textContent = ''; mostrarToast('Erro ao enviar logo: ' + eUpload.message, 'erro'); return; }
+
+  const { data: urlData } = db.storage.from('logos').getPublicUrl(caminho);
+  const { error: eSalvarUrl } = await db.from('lojas').update({ logo_url: urlData.publicUrl }).eq('id', meuPerfil.loja_id);
+  if(eSalvarUrl){ status.textContent = ''; mostrarToast('Logo enviada, mas houve erro ao salvar: ' + eSalvarUrl.message, 'erro'); return; }
+
+  status.textContent = '';
+  mostrarToast('Logo atualizada!', 'sucesso');
+  carregarMinhaLoja();
+}
+
+// =========================================================================
+// MASTER (só visível pra conta com is_admin = true)
+// =========================================================================
+async function carregarMaster(){
+  const { data, error } = await db.rpc('admin_listar_lojas');
+  if(error){ mostrarToast('Erro ao carregar lojas: ' + error.message, 'erro'); return; }
+  document.getElementById('master-tabela').innerHTML = (data || []).map(l => (
+    '<tr><td>' + l.nome + '</td><td>' + (l.cidade || '—') + '</td><td>' + (l.tel || '—') + '</td>' +
+    '<td>' + l.total_membros + '</td><td>' + l.total_pedidos + '</td>' +
+    '<td><span class="badge badge-' + (l.ativa ? 'finalizado' : 'cancelado') + '">' + (l.ativa ? 'Ativa' : 'Inativa') + '</span></td>' +
+    '<td>' + new Date(l.criado_em).toLocaleDateString('pt-BR') + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="alternarLojaAtivaMaster(' + l.loja_id + ',' + !l.ativa + ')">' + (l.ativa ? 'Desativar' : 'Ativar') + '</button></td></tr>'
+  )).join('') || '<tr><td colspan="8" style="color:var(--cor-texto-suave);">Nenhuma loja cadastrada ainda.</td></tr>';
+}
+
+async function alternarLojaAtivaMaster(lojaId, novoValor){
+  const { error } = await db.rpc('admin_alternar_loja_ativa', { p_loja_id: lojaId, p_ativa: novoValor });
+  if(error){ mostrarToast('Erro: ' + error.message, 'erro'); return; }
+  mostrarToast(novoValor ? 'Loja ativada.' : 'Loja desativada.', 'sucesso');
+  carregarMaster();
 }
 </script>
 </body>
