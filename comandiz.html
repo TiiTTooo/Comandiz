@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comandiz</title>
+<style>
+  :root{
+    --cor-primaria:#e8590c; --cor-primaria-escura:#c94a08; --cor-fundo:#f7f5f2;
+    --cor-card:#ffffff; --cor-texto:#2b2b2b; --cor-texto-suave:#6b6b6b;
+    --cor-borda:#e4e0da; --cor-verde:#2f9e44; --cor-amarelo:#e8a800; --cor-vermelho:#d63939;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--cor-fundo);color:var(--cor-texto);}
+  button{cursor:pointer;font-family:inherit;}
+  input,select,textarea{font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--cor-borda);border-radius:8px;width:100%;background:#fff;color:var(--cor-texto);}
+  label{display:block;font-size:13px;color:var(--cor-texto-suave);margin:10px 0 4px;}
+  .btn{background:var(--cor-primaria);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:600;}
+  .btn:hover{background:var(--cor-primaria-escura);}
+  .btn-secundario{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 16px;font-size:15px;}
+  .btn-perigo{background:var(--cor-vermelho);color:#fff;border:none;border-radius:8px;padding:8px 12px;font-size:13px;}
+  .btn-pequeno{padding:6px 10px;font-size:13px;border-radius:6px;}
+  .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .linha{display:flex;gap:10px;flex-wrap:wrap;}
+  .linha > *{flex:1;min-width:140px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--cor-borda);}
+  th{color:var(--cor-texto-suave);font-weight:600;font-size:12px;text-transform:uppercase;}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:600;}
+  .badge-baixo{background:#ffe3e3;color:var(--cor-vermelho);}
+  .badge-medio{background:#fff3bf;color:#9c6a00;}
+  .badge-alto{background:#d3f9d8;color:var(--cor-verde);}
+  .badge-aberto{background:#e7f5ff;color:#1971c2;}
+  .badge-pronto{background:#fff3bf;color:#9c6a00;}
+  .badge-finalizado{background:#d3f9d8;color:var(--cor-verde);}
+  .badge-cancelado{background:#f1f3f5;color:#868e96;}
+
+  /* ---------- Telas de autenticação / onboarding ---------- */
+  #tela-auth, #tela-onboarding{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .caixa-auth{background:var(--cor-card);border-radius:16px;padding:32px;max-width:380px;width:100%;box-shadow:0 6px 24px rgba(0,0,0,.06);}
+  .caixa-auth h1{margin:0 0 4px;font-size:26px;}
+  .caixa-auth p.sub{color:var(--cor-texto-suave);margin:0 0 20px;font-size:14px;}
+  .toggle-auth{text-align:center;margin-top:14px;font-size:14px;color:var(--cor-texto-suave);}
+  .toggle-auth a{color:var(--cor-primaria);cursor:pointer;font-weight:600;}
+
+  /* ---------- App principal ---------- */
+  #app{display:flex;min-height:100vh;}
+  #sidebar{width:220px;background:#1f1b16;color:#fff;padding:18px 12px;flex-shrink:0;}
+  #sidebar h2{font-size:20px;margin:4px 8px 20px;color:#fff;}
+  #sidebar .nav-btn{display:block;width:100%;text-align:left;background:none;border:none;color:#d8d2c9;padding:11px 12px;border-radius:8px;font-size:14px;margin-bottom:2px;}
+  #sidebar .nav-btn:hover{background:#332c23;}
+  #sidebar .nav-btn.ativo{background:var(--cor-primaria);color:#fff;}
+  #sidebar .loja-nome{font-size:12px;color:#9c9488;padding:0 8px 14px;border-bottom:1px solid #3a332a;margin-bottom:10px;}
+  #sidebar .sair{margin-top:20px;border-top:1px solid #3a332a;padding-top:14px;}
+  #conteudo{flex:1;padding:24px;max-width:1100px;}
+  #conteudo h1{font-size:22px;margin:0 0 18px;}
+  .stats-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;}
+  .stat{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px 18px;flex:1;min-width:150px;}
+  .stat .valor{font-size:24px;font-weight:700;}
+  .stat .rotulo{font-size:12px;color:var(--cor-texto-suave);text-transform:uppercase;}
+
+  .modal-fundo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:100;padding:16px;}
+  .modal-fundo.aberto{display:flex;}
+  .modal-caixa{background:#fff;border-radius:14px;padding:24px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;}
+  .modal-caixa h2{margin-top:0;}
+  .item-linha{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .item-linha span{flex:1;}
+  .fechar-x{float:right;background:none;border:none;font-size:20px;color:var(--cor-texto-suave);}
+
+  #toast-container{position:fixed;top:16px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px;}
+  .toast{padding:12px 16px;border-radius:8px;color:#fff;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:320px;}
+  .toast-sucesso{background:var(--cor-verde);}
+  .toast-erro{background:var(--cor-vermelho);}
+
+  .cozinha-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;}
+  .cozinha-card{background:#fff;border:1px solid var(--cor-borda);border-radius:12px;padding:14px;}
+  .cozinha-card.pronto{border-color:var(--cor-verde);background:#f4fcf5;}
+  .cozinha-card ul{padding-left:18px;margin:8px 0;}
+  .ordem-btns button{background:none;border:none;color:var(--cor-texto-suave);font-size:12px;padding:2px 4px;}
+
+  @media (max-width: 760px){
+    #app{flex-direction:column;}
+    #sidebar{width:100%;display:flex;flex-wrap:wrap;padding:10px;}
+    #sidebar h2, #sidebar .loja-nome{display:none;}
+    #sidebar .nav-btn{width:auto;flex:1;min-width:90px;text-align:center;font-size:12px;padding:8px 6px;}
+    #sidebar .sair{width:100%;margin-top:8px;border-top:none;padding-top:0;order:99;}
+  }
+</style>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<!-- ============== TELA DE LOGIN / CADASTRO ============== -->
+<div id="tela-auth">
+  <div class="caixa-auth">
+    <h1>Comandiz</h1>
+    <p class="sub" id="auth-subtitulo">Entrar na sua loja</p>
+
+    <form id="form-login">
+      <label>E-mail</label>
+      <input type="email" id="login-email" required>
+      <label>Senha</label>
+      <input type="password" id="login-senha" required minlength="6">
+      <button type="submit" class="btn" style="width:100%;margin-top:18px;">Entrar</button>
+    </form>
+
+    <form id="form-cadastro" style="display:none;">
+      <label>Seu nome</label>
+      <input type="text" id="cadastro-nome" required>
+      <label>E-mail</label>
+      <input type="email" id="cadastro-email" required>
+      <label>Senha (mínimo 6 caracteres)</label>
+      <input type="password" id="cadastro-senha" required minlength="6">
+      <button type="submit" class="btn" style="width:100%;margin-top:18px;">Criar conta</button>
+    </form>
+
+    <div class="toggle-auth">
+      <span id="auth-toggle-texto">Ainda não tem conta?</span>
+      <a id="auth-toggle-link" onclick="alternarFormAuth()">Cadastre-se</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============== TELA DE ONBOARDING (criar loja) ============== -->
+<div id="tela-onboarding" style="display:none;">
+  <div class="caixa-auth">
+    <h1>Vamos criar sua loja</h1>
+    <p class="sub">É rápido — você pode editar esses dados depois.</p>
+    <form id="form-onboarding">
+      <label>Nome da loja</label>
+      <input type="text" id="onb-nome" required>
+      <label>Cidade</label>
+      <input type="text" id="onb-cidade">
+      <label>Telefone</label>
+      <input type="text" id="onb-tel">
+      <button type="submit" class="btn" style="width:100%;margin-top:18px;">Criar loja</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============== APP PRINCIPAL ============== -->
+<div id="app" style="display:none;">
+  <nav id="sidebar">
+    <h2>Comandiz</h2>
+    <div class="loja-nome" id="sidebar-loja-nome">—</div>
+    <button class="nav-btn" data-aba="inicio" onclick="trocarAba('inicio')">🏠 Início</button>
+    <button class="nav-btn" data-aba="pedidos" onclick="trocarAba('pedidos')">🧾 Pedidos</button>
+    <button class="nav-btn" data-aba="cozinha" onclick="trocarAba('cozinha')">🍳 Cozinha</button>
+    <button class="nav-btn" data-aba="cardapio" onclick="trocarAba('cardapio')">📋 Cardápio</button>
+    <button class="nav-btn" data-aba="estoque" onclick="trocarAba('estoque')">📦 Estoque</button>
+    <button class="nav-btn" data-aba="despesas" onclick="trocarAba('despesas')">💸 Despesas</button>
+    <button class="nav-btn" data-aba="fornecedores" onclick="trocarAba('fornecedores')">🚚 Fornecedores</button>
+    <button class="nav-btn" data-aba="relatorios" onclick="trocarAba('relatorios')">📊 Relatórios</button>
+    <button class="nav-btn" data-aba="usuarios" onclick="trocarAba('usuarios')">👥 Usuários</button>
+    <div class="sair">
+      <button class="nav-btn" onclick="sair()">🚪 Sair</button>
+    </div>
+  </nav>
+
+  <main id="conteudo">
+
+    <!-- INÍCIO -->
+    <section id="sec-inicio">
+      <h1>Início</h1>
+      <div class="stats-row" id="inicio-stats"></div>
+      <div class="cartao">
+        <strong>Insumos com estoque baixo</strong>
+        <table id="inicio-estoque-baixo"><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- PEDIDOS -->
+    <section id="sec-pedidos" style="display:none;">
+      <h1>Pedidos</h1>
+      <button class="btn" onclick="abrirModalNovoPedido()">+ Novo pedido</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th>#</th><th>Canal</th><th>Status</th><th>Total</th><th></th></tr></thead>
+          <tbody id="pedidos-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- COZINHA -->
+    <section id="sec-cozinha" style="display:none;">
+      <h1>Cozinha</h1>
+      <div class="cozinha-grid" id="cozinha-grid"></div>
+    </section>
+
+    <!-- CARDÁPIO -->
+    <section id="sec-cardapio" style="display:none;">
+      <h1>Cardápio</h1>
+      <button class="btn" onclick="abrirModalProduto()">+ Novo produto</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th></th><th>Nome</th><th>Categoria</th><th>Preço</th><th>Ativo</th><th></th></tr></thead>
+          <tbody id="produtos-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ESTOQUE -->
+    <section id="sec-estoque" style="display:none;">
+      <h1>Estoque</h1>
+      <button class="btn" onclick="abrirModalInsumo()">+ Novo insumo</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th>Nome</th><th>Unid.</th><th>Saldo</th><th>Status</th><th></th></tr></thead>
+          <tbody id="insumos-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- DESPESAS -->
+    <section id="sec-despesas" style="display:none;">
+      <h1>Despesas</h1>
+      <button class="btn" onclick="abrirModalDespesa()">+ Nova despesa</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th>Data</th><th>Fornecedor</th><th>Valor</th><th>Pagamento</th></tr></thead>
+          <tbody id="despesas-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- FORNECEDORES -->
+    <section id="sec-fornecedores" style="display:none;">
+      <h1>Fornecedores</h1>
+      <button class="btn" onclick="abrirModalFornecedor()">+ Novo fornecedor</button>
+      <div class="cartao" style="margin-top:16px;">
+        <table>
+          <thead><tr><th></th><th>Nome</th><th>Ativo</th><th></th></tr></thead>
+          <tbody id="fornecedores-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- RELATÓRIOS -->
+    <section id="sec-relatorios" style="display:none;">
+      <h1>Relatórios</h1>
+      <div class="cartao">
+        <div class="linha">
+          <div><label>De</label><input type="date" id="rel-inicio"></div>
+          <div><label>Até</label><input type="date" id="rel-fim"></div>
+          <div style="display:flex;align-items:flex-end;"><button class="btn" onclick="carregarRelatorio()">Gerar</button></div>
+        </div>
+      </div>
+      <div class="stats-row" id="relatorio-stats"></div>
+    </section>
+
+    <!-- USUÁRIOS -->
+    <section id="sec-usuarios" style="display:none;">
+      <h1>Usuários</h1>
+      <button class="btn" onclick="abrirModalConvite()">+ Convidar usuário</button>
+      <div class="cartao" style="margin-top:16px;">
+        <strong>Membros da loja</strong>
+        <table>
+          <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th></tr></thead>
+          <tbody id="membros-tabela"></tbody>
+        </table>
+      </div>
+      <div class="cartao">
+        <strong>Convites pendentes</strong>
+        <table>
+          <thead><tr><th>E-mail</th><th>Papel</th></tr></thead>
+          <tbody id="convites-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============== MODAL GENÉRICO ============== -->
+<div class="modal-fundo" id="modal-fundo">
+  <div class="modal-caixa" id="modal-caixa"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* =========================================================================
+   COMANDIZ — lógica do app (arquivo único, sem build)
+   ========================================================================= */
+
+// --------- CONFIGURAÇÃO: troque pelos valores do SEU projeto Supabase ----
+// Supabase → Project Settings → API → Project URL / anon public key
+const SUPABASE_URL = "https://hxowgovqulwfvnradamc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4b3dnb3ZxdWx3ZnZucmFkYW1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4MTY3MjYsImV4cCI6MjA5OTM5MjcyNn0.e8G0l0ejQNWrSXfDLm2lbyQWzlJEksgC-aMpG9sFTKY";
+// --------------------------------------------------------------------------
+
+let supabase = null;
+let usuarioAtual = null;
+let meuPerfil = null;
+let cardapioCache = [];
+let insumosCache = [];
+let fornecedoresCache = [];
+let itensNovoPedido = [];
+let canalDeliveryPedidoAberto = null;
+
+document.addEventListener('DOMContentLoaded', iniciar);
+
+async function iniciar(){
+  if(SUPABASE_URL.startsWith("COLE_AQUI") || SUPABASE_ANON_KEY.startsWith("COLE_AQUI")){
+    document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;max-width:560px;margin:0 auto;">' +
+      '<h2>Comandiz ainda não está configurado</h2>' +
+      '<p>Abra este arquivo, procure por <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> perto do topo do &lt;script&gt;, ' +
+      'e substitua pelos valores do seu projeto Supabase (Project Settings → API).</p></div>';
+    return;
+  }
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  document.getElementById('form-login').addEventListener('submit', fazerLogin);
+  document.getElementById('form-cadastro').addEventListener('submit', fazerCadastro);
+  document.getElementById('form-onboarding').addEventListener('submit', criarLoja);
+
+  const { data:{ session } } = await supabase.auth.getSession();
+  if(session){
+    usuarioAtual = session.user;
+    await depoisDoLogin();
+  }
+}
+
+// =========================================================================
+// AUTENTICAÇÃO
+// =========================================================================
+function alternarFormAuth(){
+  const loginVisivel = document.getElementById('form-login').style.display !== 'none';
+  document.getElementById('form-login').style.display = loginVisivel ? 'none' : 'block';
+  document.getElementById('form-cadastro').style.display = loginVisivel ? 'block' : 'none';
+  document.getElementById('auth-subtitulo').textContent = loginVisivel ? 'Criar sua conta' : 'Entrar na sua loja';
+  document.getElementById('auth-toggle-texto').textContent = loginVisivel ? 'Já tem conta?' : 'Ainda não tem conta?';
+  document.getElementById('auth-toggle-link').textContent = loginVisivel ? 'Entrar' : 'Cadastre-se';
+}
+
+async function fazerLogin(e){
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  if(error){ mostrarToast('Erro ao entrar: ' + error.message, 'erro'); return; }
+  usuarioAtual = data.user;
+  await depoisDoLogin();
+}
+
+async function fazerCadastro(e){
+  e.preventDefault();
+  const nome = document.getElementById('cadastro-nome').value.trim();
+  const email = document.getElementById('cadastro-email').value.trim();
+  const senha = document.getElementById('cadastro-senha').value;
+  const { data, error } = await supabase.auth.signUp({
+    email, password: senha, options: { data: { nome } }
+  });
+  if(error){ mostrarToast('Erro ao cadastrar: ' + error.message, 'erro'); return; }
+  if(!data.session){
+    mostrarToast('Conta criada! Verifique seu e-mail para confirmar antes de entrar.', 'sucesso');
+    return;
+  }
+  usuarioAtual = data.user;
+  await depoisDoLogin();
+}
+
+async function sair(){
+  await supabase.auth.signOut();
+  usuarioAtual = null; meuPerfil = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('tela-onboarding').style.display = 'none';
+  document.getElementById('tela-auth').style.display = 'flex';
+}
+
+async function depoisDoLogin(){
+  const { data: perfil, error } = await supabase.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+  if(error){ mostrarToast('Erro ao carregar perfil: ' + error.message, 'erro'); return; }
+  meuPerfil = perfil;
+  document.getElementById('tela-auth').style.display = 'none';
+
+  if(!meuPerfil.loja_id){
+    document.getElementById('tela-onboarding').style.display = 'flex';
+    return;
+  }
+  await entrarNoApp();
+}
+
+async function criarLoja(e){
+  e.preventDefault();
+  const nome = document.getElementById('onb-nome').value.trim();
+  const cidade = document.getElementById('onb-cidade').value.trim();
+  const tel = document.getElementById('onb-tel').value.trim();
+  const { error } = await supabase.from('lojas').insert({ nome, cidade, tel });
+  if(error){ mostrarToast('Erro ao criar loja: ' + error.message, 'erro'); return; }
+  const { data: perfil, error: e2 } = await supabase.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+  if(e2){ mostrarToast('Erro ao recarregar perfil: ' + e2.message, 'erro'); return; }
+  meuPerfil = perfil;
+  document.getElementById('tela-onboarding').style.display = 'none';
+  await entrarNoApp();
+}
+
+async function entrarNoApp(){
+  document.getElementById('app').style.display = 'flex';
+  const { data: loja } = await supabase.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
+  document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
+  await Promise.all([carregarCardapioCache(), carregarFornecedoresCache()]);
+  trocarAba('inicio');
+  assinarRealtimeCozinha();
+}
+
+// =========================================================================
+// NAVEGAÇÃO
+// =========================================================================
+function trocarAba(aba){
+  document.querySelectorAll('#conteudo > section').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.nav-btn[data-aba]').forEach(b => b.classList.remove('ativo'));
+  document.getElementById('sec-' + aba).style.display = 'block';
+  const btn = document.querySelector('.nav-btn[data-aba="' + aba + '"]');
+  if(btn) btn.classList.add('ativo');
+
+  if(aba === 'inicio') carregarInicio();
+  if(aba === 'pedidos') carregarPedidos();
+  if(aba === 'cozinha') carregarCozinha();
+  if(aba === 'cardapio') carregarProdutos();
+  if(aba === 'estoque') carregarInsumos();
+  if(aba === 'despesas') carregarDespesas();
+  if(aba === 'fornecedores') carregarFornecedores();
+  if(aba === 'usuarios') carregarUsuarios();
+}
+
+// =========================================================================
+// UTILITÁRIOS
+// =========================================================================
+function mostrarToast(msg, tipo){
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + (tipo === 'erro' ? 'erro' : 'sucesso');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+
+function formatarReais(v){
+  return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function fecharModal(){
+  document.getElementById('modal-fundo').classList.remove('aberto');
+  document.getElementById('modal-caixa').innerHTML = '';
+}
+
+function abrirModal(htmlConteudo){
+  document.getElementById('modal-caixa').innerHTML = '<button class="fechar-x" onclick="fecharModal()">×</button>' + htmlConteudo;
+  document.getElementById('modal-fundo').classList.add('aberto');
+}
+
+// =========================================================================
+// INÍCIO / DASHBOARD
+// =========================================================================
+async function carregarInicio(){
+  const hoje = new Date().toISOString().slice(0,10);
+
+  const { data: pedidosHoje, error: e1 } = await supabase.from('pedidos')
+    .select('total, forma_pagamento, status')
+    .eq('loja_id', meuPerfil.loja_id)
+    .gte('criado_em', hoje + 'T00:00:00')
+    .lte('criado_em', hoje + 'T23:59:59');
+  if(e1){ mostrarToast('Erro ao carregar início: ' + e1.message, 'erro'); return; }
+
+  const finalizados = (pedidosHoje || []).filter(p => p.status === 'finalizado');
+  const totalHoje = finalizados.reduce((s,p) => s + Number(p.total), 0);
+  const abertos = (pedidosHoje || []).filter(p => p.status === 'aberto' || p.status === 'pronto').length;
+
+  const { data: despesasMes } = await supabase.from('despesas')
+    .select('valor')
+    .eq('loja_id', meuPerfil.loja_id)
+    .gte('data', hoje.slice(0,7) + '-01');
+  const totalDespesasMes = (despesasMes || []).reduce((s,d) => s + Number(d.valor), 0);
+
+  const { data: estoqueBaixo } = await supabase.from('estoque_saldo')
+    .select('*').eq('loja_id', meuPerfil.loja_id).eq('status_estoque', 'Baixo');
+
+  document.getElementById('inicio-stats').innerHTML =
+    statCard('Vendido hoje', formatarReais(totalHoje)) +
+    statCard('Pedidos em aberto', abertos) +
+    statCard('Despesas do mês', formatarReais(totalDespesasMes)) +
+    statCard('Insumos em estoque baixo', (estoqueBaixo || []).length);
+
+  const corpo = document.querySelector('#inicio-estoque-baixo tbody');
+  corpo.innerHTML = (estoqueBaixo || []).length
+    ? estoqueBaixo.map(i => '<tr><td>' + i.nome + '</td><td>' + i.saldo + ' ' + i.unidade_medida + '</td></tr>').join('')
+    : '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum insumo abaixo do nível mínimo 🎉</td></tr>';
+}
+
+function statCard(rotulo, valor){
+  return '<div class="stat"><div class="valor">' + valor + '</div><div class="rotulo">' + rotulo + '</div></div>';
+}
+
+// =========================================================================
+// CARDÁPIO (cache usado no modal de novo pedido)
+// =========================================================================
+async function carregarCardapioCache(){
+  const { data, error } = await supabase.from('produtos')
+    .select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
+  if(error){ mostrarToast('Erro ao carregar cardápio: ' + error.message, 'erro'); return; }
+  cardapioCache = data || [];
+}
+
+let _cacheTodosProdutos = [];
+function cardapioCacheTodos(){ return _cacheTodosProdutos; }
+
+async function carregarProdutos(){
+  const { data, error } = await supabase.from('produtos')
+    .select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  if(error){ mostrarToast('Erro ao carregar produtos: ' + error.message, 'erro'); return; }
+  _cacheTodosProdutos = data || [];
+  const corpo = document.querySelector('#produtos-tabela tbody');
+  corpo.innerHTML = (data || []).map((p, i) => (
+    '<tr><td class="ordem-btns">' +
+      (i > 0 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'cima\')">▲</button>' : '') +
+      (i < data.length - 1 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'baixo\')">▼</button>' : '') +
+    '</td><td>' + p.nome + '</td><td>' + (p.categoria || '—') + '</td><td>' + formatarReais(p.preco_venda) + '</td>' +
+    '<td>' + (p.ativo ? '✅' : '—') + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalProduto(' + p.id + ')">Editar</button></td></tr>'
+  )).join('') || '<tr><td colspan="6" style="color:var(--cor-texto-suave);">Nenhum produto cadastrado ainda.</td></tr>';
+  cardapioCache = (data || []).filter(p => p.ativo);
+}
+
+function abrirModalProduto(id){
+  const produto = id ? cardapioCacheTodos().find(p => p.id === id) : null;
+  abrirModal(
+    '<h2>' + (produto ? 'Editar produto' : 'Novo produto') + '</h2>' +
+    '<form id="form-produto">' +
+      '<label>Nome</label><input type="text" id="prod-nome" required value="' + (produto ? produto.nome : '') + '">' +
+      '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? (produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
+      '<label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="prod-preco" required value="' + (produto ? produto.preco_venda : '') + '">' +
+      '<label><input type="checkbox" id="prod-ativo" style="width:auto;" ' + (!produto || produto.ativo ? 'checked' : '') + '> Ativo (aparece no cardápio pra pedidos)</label>' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-produto').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const registro = {
+      loja_id: meuPerfil.loja_id,
+      nome: document.getElementById('prod-nome').value.trim(),
+      categoria: document.getElementById('prod-categoria').value.trim(),
+      preco_venda: Number(document.getElementById('prod-preco').value),
+      ativo: document.getElementById('prod-ativo').checked
+    };
+    const { error } = produto
+      ? await supabase.from('produtos').update(registro).eq('id', produto.id)
+      : await supabase.from('produtos').insert(registro);
+    if(error){ mostrarToast('Erro ao salvar produto: ' + error.message, 'erro'); return; }
+    mostrarToast('Produto salvo!', 'sucesso');
+    fecharModal(); carregarProdutos();
+  });
+}
+
+async function moverOrdemProduto(id, direcao){
+  const { data } = await supabase.from('produtos').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  const lista = data || [];
+  const idx = lista.findIndex(p => p.id === id);
+  const alvo = direcao === 'cima' ? idx - 1 : idx + 1;
+  if(alvo < 0 || alvo >= lista.length) return;
+  const a = lista[idx], b = lista[alvo];
+  const { error: e1 } = await supabase.from('produtos').update({ ordem: b.ordem }).eq('id', a.id);
+  if(e1){ mostrarToast('Erro ao reordenar: ' + e1.message, 'erro'); return; }
+  const { error: e2 } = await supabase.from('produtos').update({ ordem: a.ordem }).eq('id', b.id);
+  if(e2){
+    await supabase.from('produtos').update({ ordem: a.ordem }).eq('id', a.id);
+    mostrarToast('Erro ao reordenar: ' + e2.message, 'erro'); return;
+  }
+  carregarProdutos();
+}
+
+// =========================================================================
+// PEDIDOS
+// =========================================================================
+async function carregarPedidos(){
+  const { data, error } = await supabase.from('pedidos')
+    .select('*').eq('loja_id', meuPerfil.loja_id)
+    .neq('status', 'cancelado')
+    .order('criado_em', { ascending: false }).limit(50);
+  if(error){ mostrarToast('Erro ao carregar pedidos: ' + error.message, 'erro'); return; }
+  document.querySelector('#pedidos-tabela tbody').innerHTML = (data || []).map(p => (
+    '<tr><td>#' + p.id + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
+    '<td><span class="badge badge-' + p.status + '">' + p.status + '</span></td>' +
+    '<td>' + formatarReais(p.total) + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="abrirDetalhePedido(' + p.id + ')">Abrir</button></td></tr>'
+  )).join('') || '<tr><td colspan="5" style="color:var(--cor-texto-suave);">Nenhum pedido ainda.</td></tr>';
+}
+
+function rotuloCanal(c){
+  return { balcao:'Balcão', mesa:'Mesa', ifood:'iFood', whatsapp:'WhatsApp' }[c] || c;
+}
+
+function abrirModalNovoPedido(){
+  itensNovoPedido = [];
+  abrirModal(
+    '<h2>Novo pedido</h2>' +
+    '<label>Canal</label>' +
+    '<select id="np-canal" onchange="document.getElementById(\'np-mesa-wrap\').style.display = this.value===\'mesa\'?\'block\':\'none\'">' +
+      '<option value="balcao">Balcão</option><option value="mesa">Mesa</option>' +
+      '<option value="ifood">iFood</option><option value="whatsapp">WhatsApp</option>' +
+    '</select>' +
+    '<div id="np-mesa-wrap" style="display:none;"><label>Número da mesa</label><input type="text" id="np-mesa"></div>' +
+    '<label>Adicionar item</label>' +
+    '<div class="linha">' +
+      '<select id="np-produto">' + cardapioCache.map(p => '<option value="' + p.id + '">' + p.nome + ' — ' + formatarReais(p.preco_venda) + '</option>').join('') + '</select>' +
+      '<input type="number" id="np-qtd" value="1" min="1" style="max-width:70px;">' +
+      '<button type="button" class="btn-secundario" onclick="adicionarItemNovoPedido()">+ Add</button>' +
+    '</div>' +
+    '<div id="np-itens" style="margin:14px 0;"></div>' +
+    '<div style="text-align:right;font-weight:700;" id="np-total">Total: R$ 0,00</div>' +
+    '<button class="btn" style="width:100%;margin-top:12px;" onclick="salvarNovoPedido()">Criar pedido</button>'
+  );
+}
+
+function adicionarItemNovoPedido(){
+  const produtoId = Number(document.getElementById('np-produto').value);
+  const qtd = Number(document.getElementById('np-qtd').value) || 1;
+  const produto = cardapioCache.find(p => p.id === produtoId);
+  if(!produto) return;
+  const existente = itensNovoPedido.find(i => i.produto_id === produtoId);
+  if(existente) existente.quantidade += qtd;
+  else itensNovoPedido.push({ produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd });
+  renderizarItensNovoPedido();
+}
+
+function removerItemNovoPedido(produtoId){
+  itensNovoPedido = itensNovoPedido.filter(i => i.produto_id !== produtoId);
+  renderizarItensNovoPedido();
+}
+
+function renderizarItensNovoPedido(){
+  const total = itensNovoPedido.reduce((s,i) => s + i.preco * i.quantidade, 0);
+  document.getElementById('np-itens').innerHTML = itensNovoPedido.map(i => (
+    '<div class="item-linha"><span>' + i.quantidade + 'x ' + i.nome + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
+    '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.produto_id + ')">remover</button></div>'
+  )).join('');
+  document.getElementById('np-total').textContent = 'Total: ' + formatarReais(total);
+}
+
+async function salvarNovoPedido(){
+  if(itensNovoPedido.length === 0){ mostrarToast('Adicione pelo menos um item.', 'erro'); return; }
+  const canal = document.getElementById('np-canal').value;
+  const mesa = canal === 'mesa' ? document.getElementById('np-mesa').value.trim() : null;
+
+  const { data: pedido, error } = await supabase.from('pedidos')
+    .insert({ loja_id: meuPerfil.loja_id, canal, mesa, aberto_por: usuarioAtual.id })
+    .select().single();
+  if(error){ mostrarToast('Erro ao criar pedido: ' + error.message, 'erro'); return; }
+
+  const itensParaInserir = itensNovoPedido.map(i => ({
+    pedido_id: pedido.id, produto_id: i.produto_id, quantidade: i.quantidade, preco_unit_no_momento: i.preco
+  }));
+  const { error: e2 } = await supabase.from('itens_pedido').insert(itensParaInserir);
+  if(e2){ mostrarToast('Erro ao salvar itens do pedido: ' + e2.message, 'erro'); return; }
+
+  mostrarToast('Pedido #' + pedido.id + ' criado!', 'sucesso');
+  fecharModal(); carregarPedidos();
+}
+
+async function abrirDetalhePedido(id){
+  const { data: pedido, error } = await supabase.from('pedidos').select('*').eq('id', id).single();
+  if(error){ mostrarToast('Erro ao abrir pedido: ' + error.message, 'erro'); return; }
+  const { data: itens, error: e2 } = await supabase.from('itens_pedido')
+    .select('*, produtos(nome)').eq('pedido_id', id);
+  if(e2){ mostrarToast('Erro ao carregar itens: ' + e2.message, 'erro'); return; }
+
+  const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
+  abrirModal(
+    '<h2>Pedido #' + pedido.id + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + pedido.mesa + ')' : '') + '</h2>' +
+    '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
+    '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? i.produtos.nome : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
+    '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
+    (finalizavel ? (
+      '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
+      '<select id="dp-pagamento"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option>' +
+      '<option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
+      '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(' + pedido.id + ')">Fechar e receber pagamento</button>' +
+      '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ')">Cancelar pedido</button>'
+    ) : '')
+  );
+}
+
+async function finalizarPedido(id){
+  const forma_pagamento = document.getElementById('dp-pagamento').value;
+  const { error } = await supabase.from('pedidos')
+    .update({ status: 'finalizado', forma_pagamento, fechado_em: new Date().toISOString() })
+    .eq('id', id);
+  if(error){ mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
+  mostrarToast('Pedido #' + id + ' fechado!', 'sucesso');
+  fecharModal(); carregarPedidos(); carregarInicio();
+}
+
+async function cancelarPedido(id){
+  const { error } = await supabase.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
+  if(error){ mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
+  mostrarToast('Pedido #' + id + ' cancelado.', 'sucesso');
+  fecharModal(); carregarPedidos();
+}
+
+// =========================================================================
+// COZINHA
+// =========================================================================
+async function carregarCozinha(){
+  const { data, error } = await supabase.from('pedidos')
+    .select('*, itens_pedido(quantidade, produtos(nome))')
+    .eq('loja_id', meuPerfil.loja_id)
+    .in('status', ['aberto','pronto'])
+    .order('criado_em', { ascending: true });
+  if(error){ mostrarToast('Erro ao carregar cozinha: ' + error.message, 'erro'); return; }
+  const grid = document.getElementById('cozinha-grid');
+  grid.innerHTML = (data || []).map(p => (
+    '<div class="cozinha-card ' + (p.status === 'pronto' ? 'pronto' : '') + '">' +
+      '<strong>#' + p.id + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + p.mesa + ')' : '') + '</strong>' +
+      '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? i.produtos.nome : '?') + '</li>').join('') + '</ul>' +
+      (p.status === 'aberto'
+        ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
+        : '<span class="badge badge-pronto">Pronto — aguardando fechamento</span>')
+    + '</div>'
+  )).join('') || '<p style="color:var(--cor-texto-suave);">Nenhum pedido em preparo agora.</p>';
+}
+
+async function marcarPedidoPronto(id){
+  const { error } = await supabase.from('pedidos').update({ status: 'pronto' }).eq('id', id);
+  if(error){ mostrarToast('Erro ao marcar pronto: ' + error.message, 'erro'); return; }
+  carregarCozinha();
+}
+
+function assinarRealtimeCozinha(){
+  supabase.channel('pedidos-realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: 'loja_id=eq.' + meuPerfil.loja_id },
+      () => { if(document.getElementById('sec-cozinha').style.display !== 'none') carregarCozinha(); })
+    .subscribe();
+}
+
+// =========================================================================
+// ESTOQUE
+// =========================================================================
+async function carregarInsumos(){
+  const { data, error } = await supabase.from('estoque_saldo').select('*').eq('loja_id', meuPerfil.loja_id).order('nome');
+  if(error){ mostrarToast('Erro ao carregar estoque: ' + error.message, 'erro'); return; }
+  insumosCache = data || [];
+  document.querySelector('#insumos-tabela tbody').innerHTML = insumosCache.map(i => (
+    '<tr><td>' + i.nome + '</td><td>' + i.unidade_medida + '</td><td>' + i.saldo + '</td>' +
+    '<td><span class="badge badge-' + i.status_estoque.toLowerCase().replace('é','e') + '">' + i.status_estoque + '</span></td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalMovimento(' + i.insumo_id + ')">Lançar</button></td></tr>'
+  )).join('') || '<tr><td colspan="5" style="color:var(--cor-texto-suave);">Nenhum insumo cadastrado ainda.</td></tr>';
+}
+
+function abrirModalInsumo(){
+  abrirModal(
+    '<h2>Novo insumo</h2>' +
+    '<form id="form-insumo">' +
+      '<label>Nome</label><input type="text" id="ins-nome" required placeholder="Ex: Queijo Mussarela, Coca-Cola 350ml">' +
+      '<label>Unidade de medida</label><select id="ins-unidade"><option value="un">Unidade</option><option value="kg">Quilo (kg)</option><option value="g">Grama (g)</option><option value="L">Litro (L)</option><option value="ml">Mililitro (ml)</option></select>' +
+      '<div class="linha">' +
+        '<div><label>Nível mínimo</label><input type="number" step="0.01" id="ins-min" value="0"></div>' +
+        '<div><label>Nível desejável</label><input type="number" step="0.01" id="ins-desej" value="0"></div>' +
+      '</div>' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-insumo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('insumos').insert({
+      loja_id: meuPerfil.loja_id,
+      nome: document.getElementById('ins-nome').value.trim(),
+      unidade_medida: document.getElementById('ins-unidade').value,
+      nivel_minimo: Number(document.getElementById('ins-min').value),
+      nivel_desejavel: Number(document.getElementById('ins-desej').value)
+    });
+    if(error){ mostrarToast('Erro ao salvar insumo: ' + error.message, 'erro'); return; }
+    mostrarToast('Insumo cadastrado!', 'sucesso');
+    fecharModal(); carregarInsumos();
+  });
+}
+
+function abrirModalMovimento(insumoId){
+  const insumo = insumosCache.find(i => i.insumo_id === insumoId);
+  abrirModal(
+    '<h2>Lançar movimento — ' + insumo.nome + '</h2>' +
+    '<p style="color:var(--cor-texto-suave);">Saldo atual: ' + insumo.saldo + ' ' + insumo.unidade_medida + '</p>' +
+    '<form id="form-movimento">' +
+      '<label>Tipo</label>' +
+      '<select id="mov-tipo"><option value="entrada">Entrada (compra/reposição)</option><option value="saida">Saída (uso manual)</option><option value="ajuste">Ajuste de contagem (+ ou -)</option></select>' +
+      '<label>Quantidade</label><input type="number" step="0.01" id="mov-qtd" required placeholder="Use negativo no ajuste pra corrigir pra baixo">' +
+      '<label>Motivo (opcional)</label><input type="text" id="mov-motivo">' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-movimento').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('insumo_movimentos').insert({
+      loja_id: meuPerfil.loja_id, insumo_id: insumoId,
+      tipo: document.getElementById('mov-tipo').value,
+      quantidade: Number(document.getElementById('mov-qtd').value),
+      motivo: document.getElementById('mov-motivo').value.trim(),
+      registrado_por: usuarioAtual.id
+    });
+    if(error){ mostrarToast('Erro ao lançar movimento: ' + error.message, 'erro'); return; }
+    mostrarToast('Movimento lançado!', 'sucesso');
+    fecharModal(); carregarInsumos(); carregarInicio();
+  });
+}
+
+// =========================================================================
+// FORNECEDORES
+// =========================================================================
+async function carregarFornecedoresCache(){
+  const { data, error } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
+  if(error){ mostrarToast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
+  fornecedoresCache = data || [];
+}
+
+async function carregarFornecedores(){
+  const { data, error } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  if(error){ mostrarToast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
+  document.querySelector('#fornecedores-tabela tbody').innerHTML = (data || []).map((f, i) => (
+    '<tr><td class="ordem-btns">' +
+      (i > 0 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'cima\')">▲</button>' : '') +
+      (i < data.length - 1 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'baixo\')">▼</button>' : '') +
+    '</td><td>' + f.nome + '</td><td>' + (f.ativo ? '✅' : '—') + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="alternarAtivoFornecedor(' + f.id + ',' + !f.ativo + ')">' + (f.ativo ? 'Desativar' : 'Ativar') + '</button></td></tr>'
+  )).join('') || '<tr><td colspan="4" style="color:var(--cor-texto-suave);">Nenhum fornecedor cadastrado ainda.</td></tr>';
+  fornecedoresCache = (data || []).filter(f => f.ativo);
+}
+
+function abrirModalFornecedor(){
+  abrirModal(
+    '<h2>Novo fornecedor</h2>' +
+    '<form id="form-fornecedor">' +
+      '<label>Nome</label><input type="text" id="forn-nome" required>' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-fornecedor').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('fornecedores').insert({
+      loja_id: meuPerfil.loja_id, nome: document.getElementById('forn-nome').value.trim()
+    });
+    if(error){ mostrarToast('Erro ao salvar fornecedor: ' + error.message, 'erro'); return; }
+    mostrarToast('Fornecedor cadastrado!', 'sucesso');
+    fecharModal(); carregarFornecedores();
+  });
+}
+
+async function alternarAtivoFornecedor(id, novoValor){
+  const { error } = await supabase.from('fornecedores').update({ ativo: novoValor }).eq('id', id);
+  if(error){ mostrarToast('Erro: ' + error.message, 'erro'); return; }
+  carregarFornecedores();
+}
+
+async function moverOrdemFornecedor(id, direcao){
+  const { data } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  const lista = data || [];
+  const idx = lista.findIndex(f => f.id === id);
+  const alvo = direcao === 'cima' ? idx - 1 : idx + 1;
+  if(alvo < 0 || alvo >= lista.length) return;
+  const a = lista[idx], b = lista[alvo];
+  const { error: e1 } = await supabase.from('fornecedores').update({ ordem: b.ordem }).eq('id', a.id);
+  if(e1){ mostrarToast('Erro ao reordenar: ' + e1.message, 'erro'); return; }
+  const { error: e2 } = await supabase.from('fornecedores').update({ ordem: a.ordem }).eq('id', b.id);
+  if(e2){ mostrarToast('Erro ao reordenar: ' + e2.message, 'erro'); return; }
+  carregarFornecedores();
+}
+
+// =========================================================================
+// DESPESAS
+// =========================================================================
+async function carregarDespesas(){
+  const { data, error } = await supabase.from('despesas')
+    .select('*, fornecedores(nome)').eq('loja_id', meuPerfil.loja_id)
+    .order('data', { ascending: false }).limit(100);
+  if(error){ mostrarToast('Erro ao carregar despesas: ' + error.message, 'erro'); return; }
+  document.querySelector('#despesas-tabela tbody').innerHTML = (data || []).map(d => (
+    '<tr><td>' + new Date(d.data).toLocaleDateString('pt-BR') + '</td>' +
+    '<td>' + (d.fornecedores ? d.fornecedores.nome : '—') + '</td>' +
+    '<td>' + formatarReais(d.valor) + '</td><td>' + (d.forma_pagamento || '—') + '</td></tr>'
+  )).join('') || '<tr><td colspan="4" style="color:var(--cor-texto-suave);">Nenhuma despesa lançada ainda.</td></tr>';
+}
+
+function abrirModalDespesa(){
+  abrirModal(
+    '<h2>Nova despesa</h2>' +
+    '<form id="form-despesa">' +
+      '<label>Fornecedor</label>' +
+      '<select id="desp-fornecedor">' + fornecedoresCache.map(f => '<option value="' + f.id + '">' + f.nome + '</option>').join('') + '</select>' +
+      '<label>Valor (R$)</label><input type="number" step="0.01" min="0" id="desp-valor" required>' +
+      '<label>Forma de pagamento</label>' +
+      '<select id="desp-pagamento"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
+      '<label>Data</label><input type="date" id="desp-data" value="' + new Date().toISOString().slice(0,10) + '">' +
+      '<label>Descrição (opcional)</label><input type="text" id="desp-descricao">' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-despesa').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('despesas').insert({
+      loja_id: meuPerfil.loja_id,
+      fornecedor_id: Number(document.getElementById('desp-fornecedor').value) || null,
+      valor: Number(document.getElementById('desp-valor').value),
+      forma_pagamento: document.getElementById('desp-pagamento').value,
+      data: document.getElementById('desp-data').value,
+      descricao: document.getElementById('desp-descricao').value.trim()
+    });
+    if(error){ mostrarToast('Erro ao salvar despesa: ' + error.message, 'erro'); return; }
+    mostrarToast('Despesa lançada!', 'sucesso');
+    fecharModal(); carregarDespesas(); carregarInicio();
+  });
+}
+
+// =========================================================================
+// RELATÓRIOS
+// =========================================================================
+async function carregarRelatorio(){
+  const inicio = document.getElementById('rel-inicio').value;
+  const fim = document.getElementById('rel-fim').value;
+  if(!inicio || !fim){ mostrarToast('Escolha o período.', 'erro'); return; }
+
+  const { data: pedidos, error: e1 } = await supabase.from('pedidos')
+    .select('total, forma_pagamento').eq('loja_id', meuPerfil.loja_id).eq('status', 'finalizado')
+    .gte('criado_em', inicio + 'T00:00:00').lte('criado_em', fim + 'T23:59:59');
+  if(e1){ mostrarToast('Erro ao gerar relatório: ' + e1.message, 'erro'); return; }
+
+  const { data: despesas, error: e2 } = await supabase.from('despesas')
+    .select('valor').eq('loja_id', meuPerfil.loja_id).gte('data', inicio).lte('data', fim);
+  if(e2){ mostrarToast('Erro ao gerar relatório: ' + e2.message, 'erro'); return; }
+
+  const totalVendas = (pedidos || []).reduce((s,p) => s + Number(p.total), 0);
+  const totalDespesas = (despesas || []).reduce((s,d) => s + Number(d.valor), 0);
+  const porForma = {};
+  (pedidos || []).forEach(p => { porForma[p.forma_pagamento] = (porForma[p.forma_pagamento] || 0) + Number(p.total); });
+
+  let html = statCard('Total vendido', formatarReais(totalVendas)) +
+             statCard('Total despesas', formatarReais(totalDespesas)) +
+             statCard('Líquido', formatarReais(totalVendas - totalDespesas));
+  Object.keys(porForma).forEach(forma => { html += statCard(forma, formatarReais(porForma[forma])); });
+  document.getElementById('relatorio-stats').innerHTML = html;
+}
+
+// =========================================================================
+// USUÁRIOS
+// =========================================================================
+async function carregarUsuarios(){
+  const { data: membros, error: e1 } = await supabase.from('perfis').select('nome, email, role').eq('loja_id', meuPerfil.loja_id);
+  if(e1){ mostrarToast('Erro ao carregar usuários: ' + e1.message, 'erro'); return; }
+  document.querySelector('#membros-tabela tbody').innerHTML = (membros || []).map(m => (
+    '<tr><td>' + (m.nome || '—') + '</td><td>' + m.email + '</td><td>' + m.role + '</td></tr>'
+  )).join('');
+
+  const { data: convites, error: e2 } = await supabase.from('convites').select('*').eq('loja_id', meuPerfil.loja_id).eq('usado', false);
+  if(e2){ mostrarToast('Erro ao carregar convites: ' + e2.message, 'erro'); return; }
+  document.querySelector('#convites-tabela tbody').innerHTML = (convites || []).map(c => (
+    '<tr><td>' + c.email + '</td><td>' + c.role + '</td></tr>'
+  )).join('') || '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum convite pendente.</td></tr>';
+}
+
+function abrirModalConvite(){
+  abrirModal(
+    '<h2>Convidar usuário</h2>' +
+    '<p style="color:var(--cor-texto-suave);font-size:13px;">A pessoa vai receber acesso automaticamente assim que se cadastrar no Comandiz com esse e-mail.</p>' +
+    '<form id="form-convite">' +
+      '<label>E-mail</label><input type="email" id="conv-email" required>' +
+      '<label>Papel</label><select id="conv-role"><option value="gerente">Gerente</option><option value="dono">Dono</option></select>' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Convidar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-convite').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('convites').insert({
+      loja_id: meuPerfil.loja_id,
+      email: document.getElementById('conv-email').value.trim(),
+      role: document.getElementById('conv-role').value,
+      criado_por: usuarioAtual.id
+    });
+    if(error){ mostrarToast('Erro ao convidar: ' + error.message, 'erro'); return; }
+    mostrarToast('Convite criado!', 'sucesso');
+    fecharModal(); carregarUsuarios();
+  });
+}
+</script>
+</body>
+</html>
