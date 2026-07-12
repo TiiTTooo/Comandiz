@@ -24,6 +24,11 @@
   .forma-btn{background:#fff;color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 14px;font-size:14px;cursor:pointer;flex:1;min-width:110px;}
   .forma-btn:hover{border-color:var(--cor-primaria);}
   .forma-btn.selecionada{background:var(--cor-primaria);color:#fff;border-color:var(--cor-primaria);font-weight:600;}
+  .autocomplete-wrap{position:relative;}
+  .autocomplete-lista{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--cor-borda);border-radius:8px;margin-top:2px;max-height:180px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.12);}
+  .autocomplete-item{padding:9px 10px;cursor:pointer;font-size:14px;}
+  .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
+  .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
   .linha{display:flex;gap:10px;flex-wrap:wrap;}
   .linha > *{flex:1;min-width:140px;}
@@ -762,7 +767,17 @@ function abrirModalNovoPedido(){
     '<div id="np-mesa-wrap" style="display:none;"><label>Número da mesa</label><input type="text" id="np-mesa"></div>' +
     '<label>Adicionar item</label>' +
     '<div class="linha">' +
-      '<select id="np-produto">' + cardapioCache.map(p => '<option value="' + p.id + '">' + p.nome + ' — ' + formatarReais(p.preco_venda) + '</option>').join('') + '</select>' +
+      '<div class="autocomplete-wrap" style="flex:2;min-width:180px;">' +
+        '<div style="display:flex;gap:4px;">' +
+          '<input type="text" id="np-produto-busca" placeholder="Digite pra buscar ou clique na seta pra ver tudo" autocomplete="off" style="flex:1;" ' +
+            'oninput="filtrarProdutosNovoPedido(this.value)" onfocus="filtrarProdutosNovoPedido(this.value)" ' +
+            'onblur="esconderListaProdutosNovoPedidoComAtraso()">' +
+          '<button type="button" class="btn-secundario" style="width:auto;padding:9px 12px;" ' +
+            'onmousedown="event.preventDefault(); alternarListaProdutosNovoPedido();">▾</button>' +
+        '</div>' +
+        '<input type="hidden" id="np-produto">' +
+        '<div id="np-produto-lista" class="autocomplete-lista" style="display:none;"></div>' +
+      '</div>' +
       '<input type="number" id="np-qtd" value="1" min="1" style="max-width:70px;">' +
       '<button type="button" class="btn-secundario" onclick="adicionarItemNovoPedido()">+ Add</button>' +
     '</div>' +
@@ -772,15 +787,57 @@ function abrirModalNovoPedido(){
   );
 }
 
+function normalizarBusca(s){
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function filtrarProdutosNovoPedido(termo){
+  const termoNorm = normalizarBusca(termo);
+  const lista = document.getElementById('np-produto-lista');
+  const encontrados = cardapioCache.filter(p => normalizarBusca(p.nome).includes(termoNorm));
+  lista.innerHTML = encontrados.length
+    ? encontrados.map(p => '<div class="autocomplete-item" onmousedown="selecionarProdutoNovoPedido(' + p.id + ')">' + p.nome + ' — ' + formatarReais(p.preco_venda) + '</div>').join('')
+    : '<div class="autocomplete-vazio">Nenhum produto encontrado</div>';
+  lista.style.display = 'block';
+}
+
+// Botão de seta: mostra a lista completa (igual uma caixa de seleção normal),
+// ignorando o que já foi digitado — sem precisar apagar o texto pra ver tudo.
+function alternarListaProdutosNovoPedido(){
+  const lista = document.getElementById('np-produto-lista');
+  if(lista.style.display === 'block'){ lista.style.display = 'none'; return; }
+  filtrarProdutosNovoPedido('');
+}
+
+// Some com a lista um pouco depois do campo perder o foco — o atraso dá tempo
+// do clique num item da lista (ou na seta) ser processado antes de esconder.
+function esconderListaProdutosNovoPedidoComAtraso(){
+  setTimeout(() => {
+    const lista = document.getElementById('np-produto-lista');
+    if(lista) lista.style.display = 'none';
+  }, 150);
+}
+
+function selecionarProdutoNovoPedido(produtoId){
+  const produto = cardapioCache.find(p => p.id === produtoId);
+  if(!produto) return;
+  document.getElementById('np-produto').value = produto.id;
+  document.getElementById('np-produto-busca').value = produto.nome + ' — ' + formatarReais(produto.preco_venda);
+  document.getElementById('np-produto-lista').style.display = 'none';
+}
+
 function adicionarItemNovoPedido(){
   const produtoId = Number(document.getElementById('np-produto').value);
   const qtd = Number(document.getElementById('np-qtd').value) || 1;
   const produto = cardapioCache.find(p => p.id === produtoId);
-  if(!produto) return;
+  if(!produto){ mostrarToast('Busque e selecione um produto da lista antes de adicionar.', 'erro'); return; }
   const existente = itensNovoPedido.find(i => i.produto_id === produtoId);
   if(existente) existente.quantidade += qtd;
   else itensNovoPedido.push({ produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd });
   renderizarItensNovoPedido();
+  document.getElementById('np-produto').value = '';
+  document.getElementById('np-produto-busca').value = '';
+  document.getElementById('np-qtd').value = 1;
 }
 
 function removerItemNovoPedido(produtoId){
@@ -834,7 +891,7 @@ async function abrirDetalhePedido(id){
       '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
       '<input type="hidden" id="dp-pagamento" value="">' +
       '<div class="forma-pagamento-botoes" id="dp-pagamento-botoes">' +
-        ['dinheiro:Dinheiro','pix:Pix','debito:Cartão Débito','credito:Cartão Crédito','fiado:Fiado'].map(par => {
+        ['dinheiro:💵 Dinheiro','pix:⚡ Pix','debito:🏧 Cartão Débito','credito:💳 Cartão Crédito','fiado:📒 Fiado'].map(par => {
           const [valor, rotulo] = par.split(':');
           return '<button type="button" class="forma-btn" data-valor="' + valor + '" onclick="selecionarFormaPagamento(this,\'' + valor + '\')">' + rotulo + '</button>';
         }).join('') +
