@@ -29,6 +29,10 @@
   .autocomplete-item{padding:9px 10px;cursor:pointer;font-size:14px;}
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
+  .tema-swatches{display:flex;gap:10px;flex-wrap:wrap;}
+  .tema-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;box-shadow:0 0 0 2px transparent;}
+  .tema-swatch.selecionado{box-shadow:0 0 0 2px #fff;}
+  .tema-swatches-sidebar{padding:0 12px 14px;}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
   .linha{display:flex;gap:10px;flex-wrap:wrap;}
   .linha > *{flex:1;min-width:140px;}
@@ -203,6 +207,7 @@
     <button class="nav-btn" data-aba="minha-loja" onclick="trocarAba('minha-loja')">🏪 Minha Loja</button>
     <button class="nav-btn" data-aba="master" id="nav-master" onclick="trocarAba('master')" style="display:none;">🛡️ Master</button>
     <div class="sair">
+      <div class="tema-swatches tema-swatches-sidebar" id="tema-swatches" title="Tema de cores"></div>
       <button class="nav-btn" onclick="sair()">🚪 Sair</button>
     </div>
   </nav>
@@ -417,6 +422,7 @@ let canalDeliveryPedidoAberto = null;
 document.addEventListener('DOMContentLoaded', iniciar);
 
 async function iniciar(){
+  carregarTemaSalvo();
   if(SUPABASE_URL.startsWith("COLE_AQUI") || SUPABASE_ANON_KEY.startsWith("COLE_AQUI")){
     document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;max-width:560px;margin:0 auto;">' +
       '<h2>Comandiz ainda não está configurado</h2>' +
@@ -1533,6 +1539,49 @@ function abrirModalConvite(){
     mostrarToast('Convite criado!', 'sucesso');
     fecharModal(); carregarUsuarios();
   });
+}
+
+// =========================================================================
+// TEMA DE CORES (preferência salva no navegador, não no banco)
+// =========================================================================
+const TEMAS_CORES = [
+  { id: 'laranja', nome: 'Laranja', primaria: '#e8590c', escura: '#c94a08' },
+  { id: 'verde', nome: 'Verde', primaria: '#2f9e44', escura: '#237032' },
+  { id: 'azul', nome: 'Azul', primaria: '#1971c2', escura: '#145591' },
+  { id: 'vermelho', nome: 'Vermelho', primaria: '#d63939', escura: '#b52d2d' },
+  { id: 'roxo', nome: 'Roxo', primaria: '#7048e8', escura: '#5f3dc4' },
+  { id: 'rosa', nome: 'Rosa', primaria: '#e64980', escura: '#c2255c' },
+  { id: 'grafite', nome: 'Grafite', primaria: '#343a40', escura: '#212529' }
+];
+
+function obterTemaSalvo(){
+  try{ return localStorage.getItem('comandiz_tema') || 'laranja'; }catch(e){ return 'laranja'; }
+}
+
+function aplicarTema(temaId, persistir){
+  const tema = TEMAS_CORES.find(t => t.id === temaId) || TEMAS_CORES[0];
+  document.documentElement.style.setProperty('--cor-primaria', tema.primaria);
+  document.documentElement.style.setProperty('--cor-primaria-escura', tema.escura);
+  if(persistir){
+    try{ localStorage.setItem('comandiz_tema', tema.id); }catch(e){}
+  }
+  renderizarSwatchesTema();
+}
+
+function carregarTemaSalvo(){
+  aplicarTema(obterTemaSalvo(), false);
+}
+
+function renderizarSwatchesTema(){
+  const container = document.getElementById('tema-swatches');
+  if(!container) return;
+  const temaAtual = obterTemaSalvo();
+  container.innerHTML = TEMAS_CORES.map(t => (
+    '<div class="tema-swatch' + (t.id === temaAtual ? ' selecionado' : '') + '" ' +
+      'style="background:' + t.primaria + ';" title="' + t.nome + '" onclick="aplicarTema(\'' + t.id + '\', true)">' +
+      (t.id === temaAtual ? '✓' : '') +
+    '</div>'
+  )).join('');
 }
 
 // =========================================================================
