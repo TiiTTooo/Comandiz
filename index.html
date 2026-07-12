@@ -10,12 +10,8 @@
     --cor-card:#ffffff; --cor-texto:#2b2b2b; --cor-texto-suave:#6b6b6b;
     --cor-borda:#e4e0da; --cor-verde:#2f9e44; --cor-amarelo:#e8a800; --cor-vermelho:#d63939;
   }
-  [data-modo="escuro"]{
-    --cor-fundo:#15130f; --cor-card:#211d17; --cor-texto:#f2ece2;
-    --cor-texto-suave:#a89f8f; --cor-borda:#3a332a;
-  }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--cor-fundo);color:var(--cor-texto);transition:background .2s,color .2s;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:var(--cor-fundo);color:var(--cor-texto);}
   button{cursor:pointer;font-family:inherit;}
   input,select,textarea{font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--cor-borda);border-radius:8px;width:100%;background:var(--cor-card);color:var(--cor-texto);}
   label{display:block;font-size:13px;color:var(--cor-texto-suave);margin:10px 0 4px;}
@@ -33,13 +29,6 @@
   .autocomplete-item{padding:9px 10px;cursor:pointer;font-size:14px;}
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
-  .toggle-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;}
-  .toggle{position:relative;width:44px;height:24px;flex-shrink:0;display:inline-block;}
-  .toggle input{opacity:0;width:0;height:0;position:absolute;}
-  .toggle-slider{position:absolute;inset:0;background:var(--cor-borda);border-radius:24px;cursor:pointer;transition:.2s;}
-  .toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
-  .toggle input:checked + .toggle-slider{background:var(--cor-primaria);}
-  .toggle input:checked + .toggle-slider::before{transform:translateX(20px);}
   .config-swatches-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
   .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
   .config-swatch.selecionado{border-color:var(--cor-texto);}
@@ -232,7 +221,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <strong>Vendas x despesas — últimos 7 dias</strong>
           <div style="font-size:12px;color:var(--cor-texto-suave);display:flex;gap:14px;">
-            <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-primaria);border-radius:2px;margin-right:5px;"></span>Vendido</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-verde);border-radius:2px;margin-right:5px;"></span>Vendido</span>
             <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-vermelho);border-radius:2px;margin-right:5px;"></span>Despesas</span>
           </div>
         </div>
@@ -790,7 +779,9 @@ function desenharGraficoSemana(dados){
   const larguraGrupo = larguraCss / dados.length;
   const larguraBarra = Math.min(26, larguraGrupo / 3.4);
 
-  const corVendas = getComputedStyle(document.documentElement).getPropertyValue('--cor-primaria').trim() || '#e8590c';
+  // Fixo — não acompanha a cor de destaque escolhida pela pessoa, pra manter
+  // sempre o mesmo significado visual (verde = venda, vermelho = despesa).
+  const corVendas = getComputedStyle(document.documentElement).getPropertyValue('--cor-verde').trim() || '#2f9e44';
   const corDespesas = getComputedStyle(document.documentElement).getPropertyValue('--cor-vermelho').trim() || '#d63939';
 
   ctx.font = '11px -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
@@ -1552,9 +1543,9 @@ function abrirModalConvite(){
 }
 
 // =========================================================================
-// CONFIGURAÇÕES: modo escuro/claro + cor de destaque
-// (preferências salvas no navegador de cada pessoa, não no banco — igual
-// ao Hortiz, cada login pode ter o seu próprio jeito de ver o sistema)
+// CONFIGURAÇÕES: cor de destaque dos botões
+// (preferência salva no navegador de cada pessoa, não no banco — cada
+// login pode escolher a sua própria cor sem afetar as outras contas)
 // =========================================================================
 const TEMAS_CORES = [
   { id: 'verde-musgo', nome: 'Verde Musgo', primaria: '#3ecf6e', escura: '#28a558' },
@@ -1586,21 +1577,11 @@ function aplicarTema(temaId, persistir){
   renderizarSwatchesTema();
 }
 
-function obterModoEscuro(){
-  try{ return localStorage.getItem('comandiz_modo_escuro') === '1'; }catch(e){ return false; }
-}
-
-function alternarModoEscuro(ativo){
-  document.documentElement.dataset.modo = ativo ? 'escuro' : 'claro';
-  try{ localStorage.setItem('comandiz_modo_escuro', ativo ? '1' : '0'); }catch(e){}
-}
-
 // Chamado uma vez no boot (antes até de logar) pra já entrar com a
 // preferência salva, em vez de piscar no tema errado por um instante.
 function carregarTemaSalvo(){
   const temaSalvo = obterTemaSalvo();
   if(temaSalvo) aplicarTema(temaSalvo, false);
-  document.documentElement.dataset.modo = obterModoEscuro() ? 'escuro' : 'claro';
 }
 
 function renderizarSwatchesTema(){
@@ -1617,15 +1598,9 @@ function renderizarSwatchesTema(){
 }
 
 function abrirModalConfiguracoes(){
-  const modoEscuroAtivo = obterModoEscuro();
   abrirModal(
     '<h2>⚙️ Configurações</h2>' +
-    '<div class="toggle-row">' +
-      '<span>🌙 Modo escuro</span>' +
-      '<label class="toggle"><input type="checkbox" id="cfg-modo-escuro" ' + (modoEscuroAtivo ? 'checked' : '') + ' ' +
-        'onchange="alternarModoEscuro(this.checked)"><span class="toggle-slider"></span></label>' +
-    '</div>' +
-    '<label style="margin-top:16px;">Cor de destaque</label>' +
+    '<label>Cor de destaque</label>' +
     '<div class="config-swatches-grid" id="config-swatches-grid"></div>'
   );
   renderizarSwatchesTema();
