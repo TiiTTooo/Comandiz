@@ -30,6 +30,9 @@
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
   .config-swatches-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
+  .relogio-cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:10px 20px;text-align:right;}
+  .relogio-hora{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px;color:var(--cor-primaria);line-height:1.2;}
+  .relogio-data{font-size:12px;color:var(--cor-texto-suave);text-transform:capitalize;margin-top:2px;}
   .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
   .config-swatch.selecionado{border-color:var(--cor-texto);}
   .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
@@ -215,7 +218,13 @@
 
     <!-- INÍCIO -->
     <section id="sec-inicio">
-      <h1>Início</h1>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
+        <h1 style="margin:0;">Início</h1>
+        <div class="relogio-cartao">
+          <div class="relogio-hora" id="relogio-hora">--:--:--</div>
+          <div class="relogio-data" id="relogio-data">—</div>
+        </div>
+      </div>
       <div class="stats-row" id="inicio-stats"></div>
       <div class="cartao">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
@@ -616,6 +625,7 @@ async function entrarNoApp(){
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
   assinarRealtimeCozinha();
+  iniciarRelogioInicio();
 }
 
 // =========================================================================
@@ -806,6 +816,31 @@ function desenharGraficoSemana(dados){
 
 function statCard(rotulo, valor){
   return '<div class="stat"><div class="valor">' + valor + '</div><div class="rotulo">' + rotulo + '</div></div>';
+}
+
+// =========================================================================
+// RELÓGIO (hora e data ao vivo, ao lado do título "Início")
+// =========================================================================
+let relogioInicioIntervalId = null;
+
+function atualizarRelogioInicio(){
+  const elHora = document.getElementById('relogio-hora');
+  const elData = document.getElementById('relogio-data');
+  if(!elHora || !elData) return;
+  const agora = new Date();
+  const hh = String(agora.getHours()).padStart(2, '0');
+  const mm = String(agora.getMinutes()).padStart(2, '0');
+  const ss = String(agora.getSeconds()).padStart(2, '0');
+  elHora.textContent = hh + ':' + mm + ':' + ss;
+  elData.textContent = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+// Começa a ticar uma única vez no login e continua rodando mesmo em outras
+// abas, pra já mostrar a hora certa (não travada) quando a pessoa volta pro Início.
+function iniciarRelogioInicio(){
+  atualizarRelogioInicio();
+  if(relogioInicioIntervalId) clearInterval(relogioInicioIntervalId);
+  relogioInicioIntervalId = setInterval(atualizarRelogioInicio, 1000);
 }
 
 // =========================================================================
