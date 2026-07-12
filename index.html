@@ -30,7 +30,7 @@
   .autocomplete-item:hover,.autocomplete-item.destacado{background:var(--cor-fundo);}
   .autocomplete-vazio{padding:9px 10px;color:var(--cor-texto-suave);font-size:14px;}
   .config-swatches-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px;}
-  .relogio-cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:10px 20px;text-align:right;}
+  .relogio-fixo{position:fixed;top:16px;right:24px;z-index:50;background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:10px 20px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.08);}
   .relogio-hora{font-size:24px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px;color:var(--cor-primaria);line-height:1.2;}
   .relogio-data{font-size:12px;color:var(--cor-texto-suave);text-transform:capitalize;margin-top:2px;}
   .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
@@ -105,6 +105,7 @@
     #sidebar h2, #sidebar .loja-nome{display:none;}
     #sidebar .nav-btn{width:auto;flex:1;min-width:90px;text-align:center;font-size:12px;padding:8px 6px;}
     #sidebar .sair{width:100%;margin-top:8px;border-top:none;padding-top:0;order:99;}
+    .relogio-fixo{position:static;top:auto;right:auto;width:100%;box-sizing:border-box;margin-bottom:8px;border-radius:0;}
   }
 </style>
 </head>
@@ -193,6 +194,10 @@
 
 <!-- ============== APP PRINCIPAL ============== -->
 <div id="app" style="display:none;">
+  <div class="relogio-fixo" id="relogio-fixo">
+    <div class="relogio-hora" id="relogio-hora">--:--:--</div>
+    <div class="relogio-data" id="relogio-data">—</div>
+  </div>
   <nav id="sidebar">
     <h2>Comandiz</h2>
     <div class="loja-nome" id="sidebar-loja-nome">—</div>
@@ -218,13 +223,7 @@
 
     <!-- INÍCIO -->
     <section id="sec-inicio">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;">
-        <h1 style="margin:0;">Início</h1>
-        <div class="relogio-cartao">
-          <div class="relogio-hora" id="relogio-hora">--:--:--</div>
-          <div class="relogio-data" id="relogio-data">—</div>
-        </div>
-      </div>
+      <h1>Início</h1>
       <div class="stats-row" id="inicio-stats"></div>
       <div class="cartao">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
