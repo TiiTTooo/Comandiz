@@ -289,7 +289,7 @@ const SUPABASE_URL = "https://hxowgovqulwfvnradamc.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4b3dnb3ZxdWx3ZnZucmFkYW1jIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4MTY3MjYsImV4cCI6MjA5OTM5MjcyNn0.e8G0l0ejQNWrSXfDLm2lbyQWzlJEksgC-aMpG9sFTKY";
 // --------------------------------------------------------------------------
 
-let supabase = null;
+let sb = null;
 let usuarioAtual = null;
 let meuPerfil = null;
 let cardapioCache = [];
@@ -308,13 +308,13 @@ async function iniciar(){
       'e substitua pelos valores do seu projeto Supabase (Project Settings → API).</p></div>';
     return;
   }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   document.getElementById('form-login').addEventListener('submit', fazerLogin);
   document.getElementById('form-cadastro').addEventListener('submit', fazerCadastro);
   document.getElementById('form-onboarding').addEventListener('submit', criarLoja);
 
-  const { data:{ session } } = await supabase.auth.getSession();
+  const { data:{ session } } = await sb.auth.getSession();
   if(session){
     usuarioAtual = session.user;
     await depoisDoLogin();
@@ -337,7 +337,7 @@ async function fazerLogin(e){
   e.preventDefault();
   const email = document.getElementById('login-email').value.trim();
   const senha = document.getElementById('login-senha').value;
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
   if(error){ mostrarToast('Erro ao entrar: ' + error.message, 'erro'); return; }
   usuarioAtual = data.user;
   await depoisDoLogin();
@@ -348,7 +348,7 @@ async function fazerCadastro(e){
   const nome = document.getElementById('cadastro-nome').value.trim();
   const email = document.getElementById('cadastro-email').value.trim();
   const senha = document.getElementById('cadastro-senha').value;
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await sb.auth.signUp({
     email, password: senha, options: { data: { nome } }
   });
   if(error){ mostrarToast('Erro ao cadastrar: ' + error.message, 'erro'); return; }
@@ -361,7 +361,7 @@ async function fazerCadastro(e){
 }
 
 async function sair(){
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   usuarioAtual = null; meuPerfil = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('tela-onboarding').style.display = 'none';
@@ -369,7 +369,7 @@ async function sair(){
 }
 
 async function depoisDoLogin(){
-  const { data: perfil, error } = await supabase.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+  const { data: perfil, error } = await sb.from('perfis').select('*').eq('id', usuarioAtual.id).single();
   if(error){ mostrarToast('Erro ao carregar perfil: ' + error.message, 'erro'); return; }
   meuPerfil = perfil;
   document.getElementById('tela-auth').style.display = 'none';
@@ -386,9 +386,9 @@ async function criarLoja(e){
   const nome = document.getElementById('onb-nome').value.trim();
   const cidade = document.getElementById('onb-cidade').value.trim();
   const tel = document.getElementById('onb-tel').value.trim();
-  const { error } = await supabase.from('lojas').insert({ nome, cidade, tel });
+  const { error } = await sb.from('lojas').insert({ nome, cidade, tel });
   if(error){ mostrarToast('Erro ao criar loja: ' + error.message, 'erro'); return; }
-  const { data: perfil, error: e2 } = await supabase.from('perfis').select('*').eq('id', usuarioAtual.id).single();
+  const { data: perfil, error: e2 } = await sb.from('perfis').select('*').eq('id', usuarioAtual.id).single();
   if(e2){ mostrarToast('Erro ao recarregar perfil: ' + e2.message, 'erro'); return; }
   meuPerfil = perfil;
   document.getElementById('tela-onboarding').style.display = 'none';
@@ -397,7 +397,7 @@ async function criarLoja(e){
 
 async function entrarNoApp(){
   document.getElementById('app').style.display = 'flex';
-  const { data: loja } = await supabase.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
+  const { data: loja } = await sb.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
   document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache()]);
   trocarAba('inicio');
@@ -455,7 +455,7 @@ function abrirModal(htmlConteudo){
 async function carregarInicio(){
   const hoje = new Date().toISOString().slice(0,10);
 
-  const { data: pedidosHoje, error: e1 } = await supabase.from('pedidos')
+  const { data: pedidosHoje, error: e1 } = await sb.from('pedidos')
     .select('total, forma_pagamento, status')
     .eq('loja_id', meuPerfil.loja_id)
     .gte('criado_em', hoje + 'T00:00:00')
@@ -466,13 +466,13 @@ async function carregarInicio(){
   const totalHoje = finalizados.reduce((s,p) => s + Number(p.total), 0);
   const abertos = (pedidosHoje || []).filter(p => p.status === 'aberto' || p.status === 'pronto').length;
 
-  const { data: despesasMes } = await supabase.from('despesas')
+  const { data: despesasMes } = await sb.from('despesas')
     .select('valor')
     .eq('loja_id', meuPerfil.loja_id)
     .gte('data', hoje.slice(0,7) + '-01');
   const totalDespesasMes = (despesasMes || []).reduce((s,d) => s + Number(d.valor), 0);
 
-  const { data: estoqueBaixo } = await supabase.from('estoque_saldo')
+  const { data: estoqueBaixo } = await sb.from('estoque_saldo')
     .select('*').eq('loja_id', meuPerfil.loja_id).eq('status_estoque', 'Baixo');
 
   document.getElementById('inicio-stats').innerHTML =
@@ -495,7 +495,7 @@ function statCard(rotulo, valor){
 // CARDÁPIO (cache usado no modal de novo pedido)
 // =========================================================================
 async function carregarCardapioCache(){
-  const { data, error } = await supabase.from('produtos')
+  const { data, error } = await sb.from('produtos')
     .select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
   if(error){ mostrarToast('Erro ao carregar cardápio: ' + error.message, 'erro'); return; }
   cardapioCache = data || [];
@@ -505,7 +505,7 @@ let _cacheTodosProdutos = [];
 function cardapioCacheTodos(){ return _cacheTodosProdutos; }
 
 async function carregarProdutos(){
-  const { data, error } = await supabase.from('produtos')
+  const { data, error } = await sb.from('produtos')
     .select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   if(error){ mostrarToast('Erro ao carregar produtos: ' + error.message, 'erro'); return; }
   _cacheTodosProdutos = data || [];
@@ -543,8 +543,8 @@ function abrirModalProduto(id){
       ativo: document.getElementById('prod-ativo').checked
     };
     const { error } = produto
-      ? await supabase.from('produtos').update(registro).eq('id', produto.id)
-      : await supabase.from('produtos').insert(registro);
+      ? await sb.from('produtos').update(registro).eq('id', produto.id)
+      : await sb.from('produtos').insert(registro);
     if(error){ mostrarToast('Erro ao salvar produto: ' + error.message, 'erro'); return; }
     mostrarToast('Produto salvo!', 'sucesso');
     fecharModal(); carregarProdutos();
@@ -552,17 +552,17 @@ function abrirModalProduto(id){
 }
 
 async function moverOrdemProduto(id, direcao){
-  const { data } = await supabase.from('produtos').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  const { data } = await sb.from('produtos').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   const lista = data || [];
   const idx = lista.findIndex(p => p.id === id);
   const alvo = direcao === 'cima' ? idx - 1 : idx + 1;
   if(alvo < 0 || alvo >= lista.length) return;
   const a = lista[idx], b = lista[alvo];
-  const { error: e1 } = await supabase.from('produtos').update({ ordem: b.ordem }).eq('id', a.id);
+  const { error: e1 } = await sb.from('produtos').update({ ordem: b.ordem }).eq('id', a.id);
   if(e1){ mostrarToast('Erro ao reordenar: ' + e1.message, 'erro'); return; }
-  const { error: e2 } = await supabase.from('produtos').update({ ordem: a.ordem }).eq('id', b.id);
+  const { error: e2 } = await sb.from('produtos').update({ ordem: a.ordem }).eq('id', b.id);
   if(e2){
-    await supabase.from('produtos').update({ ordem: a.ordem }).eq('id', a.id);
+    await sb.from('produtos').update({ ordem: a.ordem }).eq('id', a.id);
     mostrarToast('Erro ao reordenar: ' + e2.message, 'erro'); return;
   }
   carregarProdutos();
@@ -572,7 +572,7 @@ async function moverOrdemProduto(id, direcao){
 // PEDIDOS
 // =========================================================================
 async function carregarPedidos(){
-  const { data, error } = await supabase.from('pedidos')
+  const { data, error } = await sb.from('pedidos')
     .select('*').eq('loja_id', meuPerfil.loja_id)
     .neq('status', 'cancelado')
     .order('criado_em', { ascending: false }).limit(50);
@@ -641,7 +641,7 @@ async function salvarNovoPedido(){
   const canal = document.getElementById('np-canal').value;
   const mesa = canal === 'mesa' ? document.getElementById('np-mesa').value.trim() : null;
 
-  const { data: pedido, error } = await supabase.from('pedidos')
+  const { data: pedido, error } = await sb.from('pedidos')
     .insert({ loja_id: meuPerfil.loja_id, canal, mesa, aberto_por: usuarioAtual.id })
     .select().single();
   if(error){ mostrarToast('Erro ao criar pedido: ' + error.message, 'erro'); return; }
@@ -649,7 +649,7 @@ async function salvarNovoPedido(){
   const itensParaInserir = itensNovoPedido.map(i => ({
     pedido_id: pedido.id, produto_id: i.produto_id, quantidade: i.quantidade, preco_unit_no_momento: i.preco
   }));
-  const { error: e2 } = await supabase.from('itens_pedido').insert(itensParaInserir);
+  const { error: e2 } = await sb.from('itens_pedido').insert(itensParaInserir);
   if(e2){ mostrarToast('Erro ao salvar itens do pedido: ' + e2.message, 'erro'); return; }
 
   mostrarToast('Pedido #' + pedido.id + ' criado!', 'sucesso');
@@ -657,9 +657,9 @@ async function salvarNovoPedido(){
 }
 
 async function abrirDetalhePedido(id){
-  const { data: pedido, error } = await supabase.from('pedidos').select('*').eq('id', id).single();
+  const { data: pedido, error } = await sb.from('pedidos').select('*').eq('id', id).single();
   if(error){ mostrarToast('Erro ao abrir pedido: ' + error.message, 'erro'); return; }
-  const { data: itens, error: e2 } = await supabase.from('itens_pedido')
+  const { data: itens, error: e2 } = await sb.from('itens_pedido')
     .select('*, produtos(nome)').eq('pedido_id', id);
   if(e2){ mostrarToast('Erro ao carregar itens: ' + e2.message, 'erro'); return; }
 
@@ -681,7 +681,7 @@ async function abrirDetalhePedido(id){
 
 async function finalizarPedido(id){
   const forma_pagamento = document.getElementById('dp-pagamento').value;
-  const { error } = await supabase.from('pedidos')
+  const { error } = await sb.from('pedidos')
     .update({ status: 'finalizado', forma_pagamento, fechado_em: new Date().toISOString() })
     .eq('id', id);
   if(error){ mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
@@ -690,7 +690,7 @@ async function finalizarPedido(id){
 }
 
 async function cancelarPedido(id){
-  const { error } = await supabase.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
+  const { error } = await sb.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
   if(error){ mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
   mostrarToast('Pedido #' + id + ' cancelado.', 'sucesso');
   fecharModal(); carregarPedidos();
@@ -700,7 +700,7 @@ async function cancelarPedido(id){
 // COZINHA
 // =========================================================================
 async function carregarCozinha(){
-  const { data, error } = await supabase.from('pedidos')
+  const { data, error } = await sb.from('pedidos')
     .select('*, itens_pedido(quantidade, produtos(nome))')
     .eq('loja_id', meuPerfil.loja_id)
     .in('status', ['aberto','pronto'])
@@ -719,13 +719,13 @@ async function carregarCozinha(){
 }
 
 async function marcarPedidoPronto(id){
-  const { error } = await supabase.from('pedidos').update({ status: 'pronto' }).eq('id', id);
+  const { error } = await sb.from('pedidos').update({ status: 'pronto' }).eq('id', id);
   if(error){ mostrarToast('Erro ao marcar pronto: ' + error.message, 'erro'); return; }
   carregarCozinha();
 }
 
 function assinarRealtimeCozinha(){
-  supabase.channel('pedidos-realtime')
+  sb.channel('pedidos-realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: 'loja_id=eq.' + meuPerfil.loja_id },
       () => { if(document.getElementById('sec-cozinha').style.display !== 'none') carregarCozinha(); })
     .subscribe();
@@ -735,7 +735,7 @@ function assinarRealtimeCozinha(){
 // ESTOQUE
 // =========================================================================
 async function carregarInsumos(){
-  const { data, error } = await supabase.from('estoque_saldo').select('*').eq('loja_id', meuPerfil.loja_id).order('nome');
+  const { data, error } = await sb.from('estoque_saldo').select('*').eq('loja_id', meuPerfil.loja_id).order('nome');
   if(error){ mostrarToast('Erro ao carregar estoque: ' + error.message, 'erro'); return; }
   insumosCache = data || [];
   document.querySelector('#insumos-tabela tbody').innerHTML = insumosCache.map(i => (
@@ -760,7 +760,7 @@ function abrirModalInsumo(){
   );
   document.getElementById('form-insumo').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('insumos').insert({
+    const { error } = await sb.from('insumos').insert({
       loja_id: meuPerfil.loja_id,
       nome: document.getElementById('ins-nome').value.trim(),
       unidade_medida: document.getElementById('ins-unidade').value,
@@ -788,7 +788,7 @@ function abrirModalMovimento(insumoId){
   );
   document.getElementById('form-movimento').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('insumo_movimentos').insert({
+    const { error } = await sb.from('insumo_movimentos').insert({
       loja_id: meuPerfil.loja_id, insumo_id: insumoId,
       tipo: document.getElementById('mov-tipo').value,
       quantidade: Number(document.getElementById('mov-qtd').value),
@@ -805,13 +805,13 @@ function abrirModalMovimento(insumoId){
 // FORNECEDORES
 // =========================================================================
 async function carregarFornecedoresCache(){
-  const { data, error } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
+  const { data, error } = await sb.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
   if(error){ mostrarToast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
   fornecedoresCache = data || [];
 }
 
 async function carregarFornecedores(){
-  const { data, error } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  const { data, error } = await sb.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   if(error){ mostrarToast('Erro ao carregar fornecedores: ' + error.message, 'erro'); return; }
   document.querySelector('#fornecedores-tabela tbody').innerHTML = (data || []).map((f, i) => (
     '<tr><td class="ordem-btns">' +
@@ -833,7 +833,7 @@ function abrirModalFornecedor(){
   );
   document.getElementById('form-fornecedor').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('fornecedores').insert({
+    const { error } = await sb.from('fornecedores').insert({
       loja_id: meuPerfil.loja_id, nome: document.getElementById('forn-nome').value.trim()
     });
     if(error){ mostrarToast('Erro ao salvar fornecedor: ' + error.message, 'erro'); return; }
@@ -843,21 +843,21 @@ function abrirModalFornecedor(){
 }
 
 async function alternarAtivoFornecedor(id, novoValor){
-  const { error } = await supabase.from('fornecedores').update({ ativo: novoValor }).eq('id', id);
+  const { error } = await sb.from('fornecedores').update({ ativo: novoValor }).eq('id', id);
   if(error){ mostrarToast('Erro: ' + error.message, 'erro'); return; }
   carregarFornecedores();
 }
 
 async function moverOrdemFornecedor(id, direcao){
-  const { data } = await supabase.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  const { data } = await sb.from('fornecedores').select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
   const lista = data || [];
   const idx = lista.findIndex(f => f.id === id);
   const alvo = direcao === 'cima' ? idx - 1 : idx + 1;
   if(alvo < 0 || alvo >= lista.length) return;
   const a = lista[idx], b = lista[alvo];
-  const { error: e1 } = await supabase.from('fornecedores').update({ ordem: b.ordem }).eq('id', a.id);
+  const { error: e1 } = await sb.from('fornecedores').update({ ordem: b.ordem }).eq('id', a.id);
   if(e1){ mostrarToast('Erro ao reordenar: ' + e1.message, 'erro'); return; }
-  const { error: e2 } = await supabase.from('fornecedores').update({ ordem: a.ordem }).eq('id', b.id);
+  const { error: e2 } = await sb.from('fornecedores').update({ ordem: a.ordem }).eq('id', b.id);
   if(e2){ mostrarToast('Erro ao reordenar: ' + e2.message, 'erro'); return; }
   carregarFornecedores();
 }
@@ -866,7 +866,7 @@ async function moverOrdemFornecedor(id, direcao){
 // DESPESAS
 // =========================================================================
 async function carregarDespesas(){
-  const { data, error } = await supabase.from('despesas')
+  const { data, error } = await sb.from('despesas')
     .select('*, fornecedores(nome)').eq('loja_id', meuPerfil.loja_id)
     .order('data', { ascending: false }).limit(100);
   if(error){ mostrarToast('Erro ao carregar despesas: ' + error.message, 'erro'); return; }
@@ -893,7 +893,7 @@ function abrirModalDespesa(){
   );
   document.getElementById('form-despesa').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('despesas').insert({
+    const { error } = await sb.from('despesas').insert({
       loja_id: meuPerfil.loja_id,
       fornecedor_id: Number(document.getElementById('desp-fornecedor').value) || null,
       valor: Number(document.getElementById('desp-valor').value),
@@ -915,12 +915,12 @@ async function carregarRelatorio(){
   const fim = document.getElementById('rel-fim').value;
   if(!inicio || !fim){ mostrarToast('Escolha o período.', 'erro'); return; }
 
-  const { data: pedidos, error: e1 } = await supabase.from('pedidos')
+  const { data: pedidos, error: e1 } = await sb.from('pedidos')
     .select('total, forma_pagamento').eq('loja_id', meuPerfil.loja_id).eq('status', 'finalizado')
     .gte('criado_em', inicio + 'T00:00:00').lte('criado_em', fim + 'T23:59:59');
   if(e1){ mostrarToast('Erro ao gerar relatório: ' + e1.message, 'erro'); return; }
 
-  const { data: despesas, error: e2 } = await supabase.from('despesas')
+  const { data: despesas, error: e2 } = await sb.from('despesas')
     .select('valor').eq('loja_id', meuPerfil.loja_id).gte('data', inicio).lte('data', fim);
   if(e2){ mostrarToast('Erro ao gerar relatório: ' + e2.message, 'erro'); return; }
 
@@ -940,13 +940,13 @@ async function carregarRelatorio(){
 // USUÁRIOS
 // =========================================================================
 async function carregarUsuarios(){
-  const { data: membros, error: e1 } = await supabase.from('perfis').select('nome, email, role').eq('loja_id', meuPerfil.loja_id);
+  const { data: membros, error: e1 } = await sb.from('perfis').select('nome, email, role').eq('loja_id', meuPerfil.loja_id);
   if(e1){ mostrarToast('Erro ao carregar usuários: ' + e1.message, 'erro'); return; }
   document.querySelector('#membros-tabela tbody').innerHTML = (membros || []).map(m => (
     '<tr><td>' + (m.nome || '—') + '</td><td>' + m.email + '</td><td>' + m.role + '</td></tr>'
   )).join('');
 
-  const { data: convites, error: e2 } = await supabase.from('convites').select('*').eq('loja_id', meuPerfil.loja_id).eq('usado', false);
+  const { data: convites, error: e2 } = await sb.from('convites').select('*').eq('loja_id', meuPerfil.loja_id).eq('usado', false);
   if(e2){ mostrarToast('Erro ao carregar convites: ' + e2.message, 'erro'); return; }
   document.querySelector('#convites-tabela tbody').innerHTML = (convites || []).map(c => (
     '<tr><td>' + c.email + '</td><td>' + c.role + '</td></tr>'
@@ -965,7 +965,7 @@ function abrirModalConvite(){
   );
   document.getElementById('form-convite').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('convites').insert({
+    const { error } = await sb.from('convites').insert({
       loja_id: meuPerfil.loja_id,
       email: document.getElementById('conv-email').value.trim(),
       role: document.getElementById('conv-role').value,
