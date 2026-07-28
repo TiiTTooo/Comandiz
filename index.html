@@ -682,6 +682,24 @@ function escJs(str){
     .replace(/"/g, '&quot;');
 }
 
+// Escapa texto digitado por quem usa o sistema (nome de produto, cliente,
+// insumo, fornecedor, mesa, e-mail de convite etc.) antes de colocar dentro
+// de innerHTML — sem isso, alguém podia cadastrar um produto chamado por
+// exemplo '<img src=x onerror="...">' e, quando QUALQUER outra pessoa da
+// loja (inclusive o dono) abrisse aquela tela, esse código rodaria
+// escondido dentro da conta dela (podendo até roubar a sessão de login).
+// Usar sempre que um texto vindo do banco (não escrito por você no código)
+// for inserido via innerHTML — tanto em texto solto quanto dentro de
+// atributos tipo value="...".
+function escHtml(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fecharModal(){
   document.getElementById('modal-fundo').classList.remove('aberto');
   document.getElementById('modal-caixa').innerHTML = '';
@@ -751,7 +769,7 @@ async function carregarInicio(){
 
   const corpo = document.querySelector('#inicio-estoque-baixo tbody');
   corpo.innerHTML = (estoqueBaixo || []).length
-    ? estoqueBaixo.map(i => '<tr><td>' + i.nome + '</td><td>' + i.saldo + ' ' + i.unidade_medida + '</td></tr>').join('')
+    ? estoqueBaixo.map(i => '<tr><td>' + escHtml(i.nome) + '</td><td>' + i.saldo + ' ' + i.unidade_medida + '</td></tr>').join('')
     : '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum insumo abaixo do nível mínimo 🎉</td></tr>';
 
   // Monta os dados dia a dia (últimos 7 dias, do mais antigo pro mais recente) pro gráfico
@@ -870,7 +888,7 @@ async function carregarProdutos(){
     '<tr><td class="ordem-btns">' +
       (i > 0 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'cima\')">▲</button>' : '') +
       (i < data.length - 1 ? '<button onclick="moverOrdemProduto(' + p.id + ',\'baixo\')">▼</button>' : '') +
-    '</td><td>' + p.nome + '</td><td>' + (p.categoria ? emojiCategoria(p.categoria) + ' ' + p.categoria : '—') + '</td><td>' + formatarReais(p.preco_venda) + '</td>' +
+    '</td><td>' + escHtml(p.nome) + '</td><td>' + (p.categoria ? emojiCategoria(p.categoria) + ' ' + escHtml(p.categoria) : '—') + '</td><td>' + formatarReais(p.preco_venda) + '</td>' +
     '<td>' + (p.ativo ? '✅' : '—') + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalProduto(' + p.id + ')">Editar</button></td></tr>'
   )).join('') || '<tr><td colspan="6" style="color:var(--cor-texto-suave);">Nenhum produto cadastrado ainda.</td></tr>';
@@ -882,8 +900,8 @@ function abrirModalProduto(id){
   abrirModal(
     '<h2>' + (produto ? 'Editar produto' : 'Novo produto') + '</h2>' +
     '<form id="form-produto">' +
-      '<label>Nome</label><input type="text" id="prod-nome" required value="' + (produto ? produto.nome : '') + '">' +
-      '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? (produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
+      '<label>Nome</label><input type="text" id="prod-nome" required value="' + (produto ? escHtml(produto.nome) : '') + '">' +
+      '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? escHtml(produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
       '<label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="prod-preco" required value="' + (produto ? produto.preco_venda : '') + '">' +
       '<label><input type="checkbox" id="prod-ativo" style="width:auto;" ' + (!produto || produto.ativo ? 'checked' : '') + '> Ativo (aparece no cardápio pra pedidos)</label>' +
       '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
@@ -1013,7 +1031,7 @@ function filtrarProdutosNovoPedido(termo){
   const lista = document.getElementById('np-produto-lista');
   const encontrados = cardapioCache.filter(p => normalizarBusca(p.nome).includes(termoNorm));
   lista.innerHTML = encontrados.length
-    ? encontrados.map(p => '<div class="autocomplete-item" onmousedown="selecionarProdutoNovoPedido(' + p.id + ')">' + p.nome + ' — ' + formatarReais(p.preco_venda) + '</div>').join('')
+    ? encontrados.map(p => '<div class="autocomplete-item" onmousedown="selecionarProdutoNovoPedido(' + p.id + ')">' + escHtml(p.nome) + ' — ' + formatarReais(p.preco_venda) + '</div>').join('')
     : '<div class="autocomplete-vazio">Nenhum produto encontrado</div>';
   lista.style.display = 'block';
 }
@@ -1077,7 +1095,7 @@ function renderizarItensNovoPedido(){
     '<div class="item-linha">' +
       '<input type="number" min="1" value="' + i.quantidade + '" style="max-width:60px;" ' +
         'onchange="editarQuantidadeItemNovoPedido(' + i.produto_id + ', this.value)">' +
-      '<span>' + i.nome + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
+      '<span>' + escHtml(i.nome) + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
       '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.produto_id + ')">remover</button>' +
     '</div>'
   )).join('');
@@ -1113,9 +1131,9 @@ async function abrirDetalhePedido(id){
 
   const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
   abrirModal(
-    '<h2>Pedido #' + pedido.id + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + pedido.mesa + ')' : '') + '</h2>' +
+    '<h2>Pedido #' + pedido.id + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + escHtml(pedido.mesa) + ')' : '') + '</h2>' +
     '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
-    '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? i.produtos.nome : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
+    '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
     (finalizavel ? (
       '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
@@ -1130,7 +1148,7 @@ async function abrirDetalhePedido(id){
         '<label>Cliente (pra quem vai o fiado)</label>' +
         '<select id="dp-cliente" onchange="document.getElementById(\'dp-cliente-novo-wrap\').style.display = this.value===\'__novo__\'?\'block\':\'none\'">' +
           '<option value="">Selecione...</option>' +
-          clientesCache.map(c => '<option value="' + c.id + '">' + c.nome + '</option>').join('') +
+          clientesCache.map(c => '<option value="' + c.id + '">' + escHtml(c.nome) + '</option>').join('') +
           '<option value="__novo__">+ Novo cliente</option>' +
         '</select>' +
         '<div id="dp-cliente-novo-wrap" style="display:none;"><input type="text" id="dp-cliente-novo" placeholder="Nome do novo cliente"></div>' +
@@ -1201,8 +1219,8 @@ async function carregarCozinha(){
   const grid = document.getElementById('cozinha-grid');
   grid.innerHTML = (data || []).map(p => (
     '<div class="cozinha-card ' + (p.status === 'pronto' ? 'pronto' : '') + '">' +
-      '<strong>#' + p.id + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + p.mesa + ')' : '') + '</strong>' +
-      '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? i.produtos.nome : '?') + '</li>').join('') + '</ul>' +
+      '<strong>#' + p.id + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + escHtml(p.mesa) + ')' : '') + '</strong>' +
+      '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + '</li>').join('') + '</ul>' +
       (p.status === 'aberto'
         ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
         : '<span class="badge badge-pronto">Pronto</span>' +
@@ -1232,7 +1250,7 @@ async function carregarInsumos(){
   if(error){ mostrarToast('Erro ao carregar estoque: ' + error.message, 'erro'); return; }
   insumosCache = data || [];
   document.getElementById('insumos-tabela').innerHTML = insumosCache.map(i => (
-    '<tr><td>' + i.nome + '</td><td>' + i.unidade_medida + '</td><td>' + i.saldo + '</td>' +
+    '<tr><td>' + escHtml(i.nome) + '</td><td>' + i.unidade_medida + '</td><td>' + i.saldo + '</td>' +
     '<td><span class="badge badge-' + i.status_estoque.toLowerCase().replace('é','e') + '">' + i.status_estoque + '</span></td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalMovimento(' + i.insumo_id + ')">Lançar</button></td></tr>'
   )).join('') || '<tr><td colspan="5" style="color:var(--cor-texto-suave);">Nenhum insumo cadastrado ainda.</td></tr>';
@@ -1269,7 +1287,7 @@ function abrirModalInsumo(){
 function abrirModalMovimento(insumoId){
   const insumo = insumosCache.find(i => i.insumo_id === insumoId);
   abrirModal(
-    '<h2>Lançar movimento — ' + insumo.nome + '</h2>' +
+    '<h2>Lançar movimento — ' + escHtml(insumo.nome) + '</h2>' +
     '<p style="color:var(--cor-texto-suave);">Saldo atual: ' + insumo.saldo + ' ' + insumo.unidade_medida + '</p>' +
     '<form id="form-movimento">' +
       '<label>Tipo</label>' +
@@ -1310,7 +1328,7 @@ async function carregarFornecedores(){
     '<tr><td class="ordem-btns">' +
       (i > 0 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'cima\')">▲</button>' : '') +
       (i < data.length - 1 ? '<button onclick="moverOrdemFornecedor(' + f.id + ',\'baixo\')">▼</button>' : '') +
-    '</td><td>' + f.nome + '</td><td>' + (f.ativo ? '✅' : '—') + '</td>' +
+    '</td><td>' + escHtml(f.nome) + '</td><td>' + (f.ativo ? '✅' : '—') + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="alternarAtivoFornecedor(' + f.id + ',' + !f.ativo + ')">' + (f.ativo ? 'Desativar' : 'Ativar') + '</button></td></tr>'
   )).join('') || '<tr><td colspan="4" style="color:var(--cor-texto-suave);">Nenhum fornecedor cadastrado ainda.</td></tr>';
   fornecedoresCache = (data || []).filter(f => f.ativo);
@@ -1373,7 +1391,7 @@ async function carregarFiados(){
     statCard('Total em aberto', formatarReais(totalEmAberto)) +
     statCard('Clientes devendo', devendo.length);
   document.getElementById('fiados-tabela').innerHTML = (data || []).map(c => (
-    '<tr><td>' + c.nome + '</td><td>' + (c.telefone || '—') + '</td>' +
+    '<tr><td>' + escHtml(c.nome) + '</td><td>' + escHtml(c.telefone || '—') + '</td>' +
     '<td>' + formatarReais(c.devido) + '</td><td>' + formatarReais(c.pago) + '</td>' +
     '<td style="font-weight:700;' + (Number(c.saldo) > 0 ? 'color:#c0392b;' : '') + '">' + formatarReais(c.saldo) + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalPagamentoFiado(' + c.cliente_id + ',\'' + escJs(c.nome) + '\')">Registrar pagamento</button></td></tr>'
@@ -1404,7 +1422,7 @@ function abrirModalCliente(){
 
 function abrirModalPagamentoFiado(clienteId, nomeCliente){
   abrirModal(
-    '<h2>Registrar pagamento — ' + nomeCliente + '</h2>' +
+    '<h2>Registrar pagamento — ' + escHtml(nomeCliente) + '</h2>' +
     '<form id="form-pagamento-fiado">' +
       '<label>Valor pago (R$)</label><input type="number" step="0.01" min="0.01" id="pg-valor" required>' +
       '<label>Forma de pagamento</label>' +
@@ -1441,7 +1459,7 @@ async function carregarDespesas(){
   if(error){ mostrarToast('Erro ao carregar despesas: ' + error.message, 'erro'); return; }
   document.getElementById('despesas-tabela').innerHTML = (data || []).map(d => (
     '<tr><td>' + new Date(d.data).toLocaleDateString('pt-BR') + '</td>' +
-    '<td>' + (d.fornecedores ? d.fornecedores.nome : '—') + '</td>' +
+    '<td>' + (d.fornecedores ? escHtml(d.fornecedores.nome) : '—') + '</td>' +
     '<td>' + formatarReais(d.valor) + '</td><td>' + (d.forma_pagamento || '—') + '</td></tr>'
   )).join('') || '<tr><td colspan="4" style="color:var(--cor-texto-suave);">Nenhuma despesa lançada ainda.</td></tr>';
 }
@@ -1451,7 +1469,7 @@ function abrirModalDespesa(){
     '<h2>Nova despesa</h2>' +
     '<form id="form-despesa">' +
       '<label>Fornecedor</label>' +
-      '<select id="desp-fornecedor">' + fornecedoresCache.map(f => '<option value="' + f.id + '">' + f.nome + '</option>').join('') + '</select>' +
+      '<select id="desp-fornecedor">' + fornecedoresCache.map(f => '<option value="' + f.id + '">' + escHtml(f.nome) + '</option>').join('') + '</select>' +
       '<label>Valor (R$)</label><input type="number" step="0.01" min="0" id="desp-valor" required>' +
       '<label>Forma de pagamento</label>' +
       '<select id="desp-pagamento"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
@@ -1547,13 +1565,13 @@ async function carregarUsuarios(){
   const { data: membros, error: e1 } = await db.from('perfis').select('nome, email, role').eq('loja_id', meuPerfil.loja_id);
   if(e1){ mostrarToast('Erro ao carregar usuários: ' + e1.message, 'erro'); return; }
   document.getElementById('membros-tabela').innerHTML = (membros || []).map(m => (
-    '<tr><td>' + (m.nome || '—') + '</td><td>' + m.email + '</td><td>' + m.role + '</td></tr>'
+    '<tr><td>' + escHtml(m.nome || '—') + '</td><td>' + escHtml(m.email) + '</td><td>' + m.role + '</td></tr>'
   )).join('');
 
   const { data: convites, error: e2 } = await db.from('convites').select('*').eq('loja_id', meuPerfil.loja_id).eq('usado', false);
   if(e2){ mostrarToast('Erro ao carregar convites: ' + e2.message, 'erro'); return; }
   document.getElementById('convites-tabela').innerHTML = (convites || []).map(c => (
-    '<tr><td>' + c.email + '</td><td>' + c.role + '</td></tr>'
+    '<tr><td>' + escHtml(c.email) + '</td><td>' + c.role + '</td></tr>'
   )).join('') || '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum convite pendente.</td></tr>';
 }
 
@@ -1718,7 +1736,7 @@ async function carregarMaster(){
   const { data, error } = await db.rpc('admin_listar_lojas');
   if(error){ mostrarToast('Erro ao carregar lojas: ' + error.message, 'erro'); return; }
   document.getElementById('master-tabela').innerHTML = (data || []).map(l => (
-    '<tr><td>' + l.nome + '</td><td>' + (l.cidade || '—') + '</td><td>' + (l.tel || '—') + '</td>' +
+    '<tr><td>' + escHtml(l.nome) + '</td><td>' + escHtml(l.cidade || '—') + '</td><td>' + escHtml(l.tel || '—') + '</td>' +
     '<td>' + l.total_membros + '</td><td>' + l.total_pedidos + '</td>' +
     '<td><span class="badge badge-' + (l.ativa ? 'finalizado' : 'cancelado') + '">' + (l.ativa ? 'Ativa' : 'Inativa') + '</span></td>' +
     '<td>' + new Date(l.criado_em).toLocaleDateString('pt-BR') + '</td>' +
