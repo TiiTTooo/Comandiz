@@ -952,7 +952,7 @@ async function carregarPedidos(){
     .order('criado_em', { ascending: false }).limit(50);
   if(error){ mostrarToast('Erro ao carregar pedidos: ' + error.message, 'erro'); return; }
   document.getElementById('pedidos-tabela').innerHTML = (data || []).map(p => (
-    '<tr><td>#' + p.id + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
+    '<tr><td>#' + (p.numero_dia != null ? p.numero_dia : p.id) + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
     '<td><span class="badge badge-' + p.status + '">' + p.status + '</span></td>' +
     '<td>' + formatarReais(p.total) + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirDetalhePedido(' + p.id + ')">Abrir</button></td></tr>'
@@ -1118,7 +1118,7 @@ async function salvarNovoPedido(){
   const { error: e2 } = await db.from('itens_pedido').insert(itensParaInserir);
   if(e2){ mostrarToast('Erro ao salvar itens do pedido: ' + e2.message, 'erro'); return; }
 
-  mostrarToast('Pedido #' + pedido.id + ' criado!', 'sucesso');
+  mostrarToast('Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' criado!', 'sucesso');
   fecharModal(); carregarPedidos();
 }
 
@@ -1131,7 +1131,7 @@ async function abrirDetalhePedido(id){
 
   const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
   abrirModal(
-    '<h2>Pedido #' + pedido.id + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + escHtml(pedido.mesa) + ')' : '') + '</h2>' +
+    '<h2>Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + escHtml(pedido.mesa) + ')' : '') + '</h2>' +
     '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
     '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
@@ -1153,8 +1153,8 @@ async function abrirDetalhePedido(id){
         '</select>' +
         '<div id="dp-cliente-novo-wrap" style="display:none;"><input type="text" id="dp-cliente-novo" placeholder="Nome do novo cliente"></div>' +
       '</div>' +
-      '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(' + pedido.id + ')">Fechar e receber pagamento</button>' +
-      '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ')">Cancelar pedido</button>'
+      '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Fechar e receber pagamento</button>' +
+      '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Cancelar pedido</button>'
     ) : '')
   );
   if(finalizavel){
@@ -1170,7 +1170,7 @@ function selecionarFormaPagamento(botaoClicado, valor){
   document.getElementById('dp-cliente-wrap').style.display = valor === 'fiado' ? 'block' : 'none';
 }
 
-async function finalizarPedido(id){
+async function finalizarPedido(id, numeroDia){
   const forma_pagamento = document.getElementById('dp-pagamento').value;
   let cliente_id = null;
 
@@ -1195,14 +1195,14 @@ async function finalizarPedido(id){
     .update({ status: 'finalizado', forma_pagamento, cliente_id, fechado_em: new Date().toISOString() })
     .eq('id', id);
   if(error){ mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
-  mostrarToast(forma_pagamento === 'fiado' ? 'Pedido #' + id + ' fechado no fiado!' : 'Pedido #' + id + ' fechado!', 'sucesso');
+  mostrarToast(forma_pagamento === 'fiado' ? 'Pedido #' + numeroDia + ' fechado no fiado!' : 'Pedido #' + numeroDia + ' fechado!', 'sucesso');
   fecharModal(); carregarPedidos(); carregarInicio();
 }
 
-async function cancelarPedido(id){
+async function cancelarPedido(id, numeroDia){
   const { error } = await db.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
   if(error){ mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
-  mostrarToast('Pedido #' + id + ' cancelado.', 'sucesso');
+  mostrarToast('Pedido #' + numeroDia + ' cancelado.', 'sucesso');
   fecharModal(); carregarPedidos();
 }
 
@@ -1219,7 +1219,7 @@ async function carregarCozinha(){
   const grid = document.getElementById('cozinha-grid');
   grid.innerHTML = (data || []).map(p => (
     '<div class="cozinha-card ' + (p.status === 'pronto' ? 'pronto' : '') + '">' +
-      '<strong>#' + p.id + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + escHtml(p.mesa) + ')' : '') + '</strong>' +
+      '<strong>#' + (p.numero_dia != null ? p.numero_dia : p.id) + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + escHtml(p.mesa) + ')' : '') + '</strong>' +
       '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + '</li>').join('') + '</ul>' +
       (p.status === 'aberto'
         ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
