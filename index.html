@@ -252,7 +252,7 @@
       <button class="btn" onclick="abrirModalNovoPedido()">+ Novo pedido</button>
       <div class="cartao" style="margin-top:16px;">
         <table>
-          <thead><tr><th>#</th><th>Canal</th><th>Status</th><th>Total</th><th></th></tr></thead>
+          <thead><tr><th>#</th><th>Data</th><th>Canal</th><th>Status</th><th>Total</th><th></th></tr></thead>
           <tbody id="pedidos-tabela"></tbody>
         </table>
       </div>
@@ -670,6 +670,17 @@ function formatarReais(v){
   return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+// Padronizado pra já deixar pronto pra quando os pedidos passarem a ser
+// impressos — como o número do pedido reinicia todo dia, sem a data ele
+// fica ambíguo (ex: dois pedidos #3 em dias diferentes).
+function formatarDataPedido(dataISO){
+  return new Date(dataISO).toLocaleDateString('pt-BR');
+}
+function formatarDataHoraPedido(dataISO){
+  return new Date(dataISO).toLocaleDateString('pt-BR') + ' às ' +
+    new Date(dataISO).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
 // Usado quando um texto do usuário (ex: nome de cliente) vira argumento dentro
 // de um onclick="..." gerado via innerHTML. Precisa escapar em 2 camadas:
 // 1) pra não quebrar a string JS de aspas simples ao redor do argumento;
@@ -952,7 +963,7 @@ async function carregarPedidos(){
     .order('criado_em', { ascending: false }).limit(50);
   if(error){ mostrarToast('Erro ao carregar pedidos: ' + error.message, 'erro'); return; }
   document.getElementById('pedidos-tabela').innerHTML = (data || []).map(p => (
-    '<tr><td>#' + (p.numero_dia != null ? p.numero_dia : p.id) + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
+    '<tr><td>#' + (p.numero_dia != null ? p.numero_dia : p.id) + '</td><td>' + formatarDataPedido(p.criado_em) + '</td><td>' + rotuloCanal(p.canal) + '</td>' +
     '<td><span class="badge badge-' + p.status + '">' + p.status + '</span></td>' +
     '<td>' + formatarReais(p.total) + '</td>' +
     '<td><button class="btn-secundario btn-pequeno" onclick="abrirDetalhePedido(' + p.id + ')">Abrir</button></td></tr>'
@@ -1132,6 +1143,7 @@ async function abrirDetalhePedido(id){
   const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
   abrirModal(
     '<h2>Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + escHtml(pedido.mesa) + ')' : '') + '</h2>' +
+    '<p style="color:var(--cor-texto-suave);font-size:13px;margin-top:-8px;">' + formatarDataHoraPedido(pedido.criado_em) + '</p>' +
     '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
     '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
@@ -1220,6 +1232,7 @@ async function carregarCozinha(){
   grid.innerHTML = (data || []).map(p => (
     '<div class="cozinha-card ' + (p.status === 'pronto' ? 'pronto' : '') + '">' +
       '<strong>#' + (p.numero_dia != null ? p.numero_dia : p.id) + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + escHtml(p.mesa) + ')' : '') + '</strong>' +
+      '<div style="font-size:11px;color:var(--cor-texto-suave);margin:-2px 0 6px;">' + formatarDataPedido(p.criado_em) + '</div>' +
       '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + '</li>').join('') + '</ul>' +
       (p.status === 'aberto'
         ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
