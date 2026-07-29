@@ -856,6 +856,23 @@ async function carregarInicio(){
     .gte('data', hojeStr.slice(0,7) + '-01');
   const totalDespesasMes = (despesasMes || []).reduce((s,d) => s + Number(d.valor), 0);
 
+  // "Vendido — mês" pra fazer par com "Despesas do mês" (esse card não existia —
+  // só dava pra ver vendas de hoje e dos últimos 7 dias, então pedido mais
+  // antigo que isso ficava invisível no Início mesmo estando finalizado).
+  // Mesma janela de dias que despesasMes (dia 1 do mês corrente até hoje), e
+  // mesmo critério de "Vendido hoje"/"Vendido — 7 dias": conta todo pedido
+  // finalizado, incluindo fiado — é volume de venda, não caixa recebido (quem
+  // quiser só o que virou dinheiro de fato usa a aba Entradas).
+  const inicioMesStr = hojeStr.slice(0,7) + '-01';
+  const { data: pedidosMes, error: e1b } = await db.from('pedidos')
+    .select('total')
+    .eq('loja_id', meuPerfil.loja_id)
+    .eq('status', 'finalizado')
+    .gte('criado_em', inicioMesStr + 'T00:00:00')
+    .lte('criado_em', hojeStr + 'T23:59:59');
+  if(e1b){ mostrarToast('Erro ao carregar início: ' + e1b.message, 'erro'); return; }
+  const vendidoMes = (pedidosMes || []).reduce((s,p) => s + Number(p.total), 0);
+
   const { data: estoqueBaixo } = await db.from('estoque_saldo')
     .select('*').eq('loja_id', meuPerfil.loja_id).eq('status_estoque', 'Baixo');
 
@@ -865,6 +882,7 @@ async function carregarInicio(){
     statCard('Pedidos em aberto', abertos) +
     statCard('Vendido — 7 dias', formatarReais(vendidoSemana)) +
     statCard('Despesas — 7 dias', formatarReais(despesasSemanaTotal)) +
+    statCard('Vendido — mês', formatarReais(vendidoMes)) +
     statCard('Despesas do mês', formatarReais(totalDespesasMes)) +
     statCard('Insumos em estoque baixo', (estoqueBaixo || []).length);
 
