@@ -53,7 +53,7 @@
   .badge-cancelado{background:#f1f3f5;color:#868e96;}
 
   /* ---------- Telas de autenticação / onboarding ---------- */
-  #tela-auth, #tela-onboarding{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+  #tela-auth, #tela-onboarding, #tela-loja-desativada{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
   .caixa-auth{background:var(--cor-card);border-radius:16px;padding:32px;max-width:380px;width:100%;box-shadow:0 6px 24px rgba(0,0,0,.06);}
   .caixa-auth h1{margin:0 0 4px;font-size:26px;}
   .caixa-auth p.sub{color:var(--cor-texto-suave);margin:0 0 20px;font-size:14px;}
@@ -125,7 +125,7 @@
       <button class="login-tab" onclick="trocarAbaAuth('cadastro')">Criar conta</button>
     </div>
 
-    <form id="form-login" onsubmit="event.preventDefault();fazerLogin();">
+    <form id="form-login" onsubmit="event.preventDefault();fazerLogin(this);">
       <label>E-mail</label>
       <input type="email" id="login-email" autocomplete="email">
       <label>Senha</label>
@@ -154,7 +154,7 @@
       <p id="nova-senha-erro" class="auth-erro" style="display:none;"></p>
     </form>
 
-    <form id="form-cadastro" style="display:none;" onsubmit="event.preventDefault();fazerCadastro();">
+    <form id="form-cadastro" style="display:none;" onsubmit="event.preventDefault();fazerCadastro(this);">
       <label>Seu nome</label>
       <input type="text" id="cadastro-nome" autocomplete="name">
       <label>E-mail</label>
@@ -183,7 +183,7 @@
   <div class="caixa-auth">
     <h1>Vamos criar sua loja</h1>
     <p class="sub">É rápido — você pode editar esses dados depois.</p>
-    <form id="form-onboarding" onsubmit="event.preventDefault();criarLoja();">
+    <form id="form-onboarding" onsubmit="event.preventDefault();criarLoja(this);">
       <label>Nome da loja</label>
       <input type="text" id="onb-nome" required>
       <label>Cidade</label>
@@ -192,6 +192,17 @@
       <input type="text" id="onb-tel">
       <button type="submit" class="btn" style="width:100%;margin-top:18px;">Criar loja</button>
     </form>
+  </div>
+</div>
+
+<!-- ============== TELA DE LOJA DESATIVADA (ver Migração 10 — o acesso já é
+     bloqueado no banco quando a loja está inativa; esta tela só explica o
+     motivo em vez de deixar a pessoa olhando pra um app vazio) ============== -->
+<div id="tela-loja-desativada" style="display:none;">
+  <div class="caixa-auth" style="text-align:center;">
+    <h1>Comandiz</h1>
+    <p class="sub" style="margin-bottom:22px;">O acesso da sua loja está temporariamente desativado. Fale com quem administra o Comandiz na sua loja para regularizar.</p>
+    <button class="btn-secundario" style="width:100%;" onclick="sair()">Sair</button>
   </div>
 </div>
 
@@ -486,13 +497,16 @@ function trocarAbaAuth(aba){
 function mostrarErroLogin(msg){ const e = document.getElementById('login-erro'); e.textContent = msg; e.style.display = 'block'; }
 function mostrarErroCadastro(msg){ const e = document.getElementById('cadastro-erro'); e.textContent = msg; e.style.display = 'block'; }
 
-async function fazerLogin(){
+async function fazerLogin(form){
   const email = document.getElementById('login-email').value.trim();
   const senha = document.getElementById('login-senha').value;
   document.getElementById('login-erro').style.display = 'none';
   if(!email || !senha){ mostrarErroLogin('Preencha e-mail e senha.'); return; }
+  const btn = travarSubmit(form);
+  if(!btn) return;
   const { data, error } = await db.auth.signInWithPassword({ email, password: senha });
   if(error){
+    destravarBotao(btn);
     mostrarErroLogin(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message);
     return;
   }
@@ -518,7 +532,7 @@ async function verificarConvitePendente(){
   msg.style.display = 'block';
 }
 
-async function fazerCadastro(){
+async function fazerCadastro(form){
   const nome = document.getElementById('cadastro-nome').value.trim();
   const email = document.getElementById('cadastro-email').value.trim();
   const senha = document.getElementById('cadastro-senha').value;
@@ -537,14 +551,18 @@ async function fazerCadastro(){
     return;
   }
 
+  const btn = travarSubmit(form);
+  if(!btn) return;
   const { data, error } = await db.auth.signUp({ email, password: senha, options: { data: { nome } } });
   if(error){
+    destravarBotao(btn);
     mostrarErroCadastro(error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already exists')
       ? 'Este e-mail já está cadastrado.' : error.message);
     return;
   }
   if(!data.session){
     // isso só acontece se a confirmação de e-mail ainda estiver ligada no projeto Supabase
+    destravarBotao(btn);
     mostrarErroCadastro('Conta criada, mas a confirmação de e-mail ainda está ativada no projeto Supabase. Desligue em Authentication → Providers → Email → "Confirm email" (é um passo único de configuração, não um bug) e tente entrar de novo.');
     return;
   }
@@ -552,7 +570,7 @@ async function fazerCadastro(){
 
   if(!temConvite){
     const { error: lojaError } = await db.from('lojas').insert({ nome: lojaNome, cidade: lojaCidade, tel: lojaTel });
-    if(lojaError){ mostrarErroCadastro('Conta criada, mas houve um erro ao criar a loja: ' + lojaError.message); return; }
+    if(lojaError){ destravarBotao(btn); mostrarErroCadastro('Conta criada, mas houve um erro ao criar a loja: ' + lojaError.message); return; }
   }
 
   mostrarToast(temConvite ? 'Conta criada! Bem-vindo(a) à equipe 🎉' : 'Loja criada com sucesso!', 'sucesso');
@@ -608,23 +626,33 @@ async function depoisDoLogin(){
   await entrarNoApp();
 }
 
-async function criarLoja(){
+async function criarLoja(form){
   const nome = document.getElementById('onb-nome').value.trim();
   const cidade = document.getElementById('onb-cidade').value.trim();
   const tel = document.getElementById('onb-tel').value.trim();
+  const btn = travarSubmit(form);
+  if(!btn) return;
   const { error } = await db.from('lojas').insert({ nome, cidade, tel });
-  if(error){ mostrarToast('Erro ao criar loja: ' + error.message, 'erro'); return; }
+  if(error){ destravarBotao(btn); mostrarToast('Erro ao criar loja: ' + error.message, 'erro'); return; }
   const { data: perfil, error: e2 } = await db.from('perfis').select('*').eq('id', usuarioAtual.id).single();
-  if(e2){ mostrarToast('Erro ao recarregar perfil: ' + e2.message, 'erro'); return; }
+  if(e2){ destravarBotao(btn); mostrarToast('Erro ao recarregar perfil: ' + e2.message, 'erro'); return; }
   meuPerfil = perfil;
   document.getElementById('tela-onboarding').style.display = 'none';
   await entrarNoApp();
 }
 
 async function entrarNoApp(){
-  document.getElementById('app').style.display = 'flex';
   const { data: loja } = await db.from('lojas').select('nome').eq('id', meuPerfil.loja_id).single();
-  document.getElementById('sidebar-loja-nome').textContent = loja ? loja.nome : '';
+  if(!loja){
+    // A única forma da loja não vir aqui, com o perfil já tendo um loja_id, é a
+    // loja estar desativada (Migração 10 faz minha_loja_id() devolver NULL nesse
+    // caso, e a RLS bloqueia a leitura). Sem essa checagem, a pessoa via o app
+    // inteiro vazio — abas sem nenhum dado — sem entender o motivo.
+    document.getElementById('tela-loja-desativada').style.display = 'flex';
+    return;
+  }
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('sidebar-loja-nome').textContent = loja.nome;
   document.getElementById('nav-master').style.display = meuPerfil.is_admin ? 'block' : 'none';
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
@@ -668,6 +696,27 @@ function mostrarToast(msg, tipo){
 
 function formatarReais(v){
   return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Trava o botão assim que uma ação que grava no banco começa, pra um clique
+// duplo (ou Enter segurado) não disparar a mesma gravação duas vezes antes da
+// primeira resposta voltar. Isso já causava duplicar pedido inteiro, duplicar
+// cadastro de cliente no fiado (dividindo a dívida da pessoa em dois registros)
+// e duplicar lançamento de estoque. Em erro, chame destravarBotao pra deixar
+// tentar de novo; em sucesso o modal costuma fechar e levar o botão junto, daí
+// não precisa destravar.
+function travarBotao(botao){
+  if(!botao || botao.disabled) return null;
+  botao.disabled = true;
+  return botao;
+}
+function destravarBotao(botao){
+  if(botao) botao.disabled = false;
+}
+// Mesma ideia, mas pra formulários com <form onsubmit> — pega o botão de
+// submit dentro do form recebido em vez de exigir passar o botão direto.
+function travarSubmit(form){
+  return travarBotao(form.querySelector('button[type="submit"]'));
 }
 
 // Padronizado pra já deixar pronto pra quando os pedidos passarem a ser
@@ -927,10 +976,13 @@ function abrirModalProduto(id){
       preco_venda: Number(document.getElementById('prod-preco').value),
       ativo: document.getElementById('prod-ativo').checked
     };
+    if(registro.preco_venda < 0){ mostrarToast('Preço não pode ser negativo.', 'erro'); return; }
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = produto
       ? await db.from('produtos').update(registro).eq('id', produto.id)
       : await db.from('produtos').insert(registro);
-    if(error){ mostrarToast('Erro ao salvar produto: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar produto: ' + error.message, 'erro'); return; }
     mostrarToast('Produto salvo!', 'sucesso');
     fecharModal(); carregarProdutos();
   });
@@ -1002,7 +1054,7 @@ function abrirModalNovoPedido(){
     '</div>' +
     '<div id="np-itens" style="margin:14px 0;"></div>' +
     '<div style="text-align:right;font-weight:700;" id="np-total">Total: R$ 0,00</div>' +
-    '<button class="btn" style="width:100%;margin-top:12px;" onclick="salvarNovoPedido()">Criar pedido</button>'
+    '<button class="btn" style="width:100%;margin-top:12px;" onclick="salvarNovoPedido(this)">Criar pedido</button>'
   );
 }
 
@@ -1077,6 +1129,7 @@ function adicionarItemNovoPedido(){
   const qtd = Number(document.getElementById('np-qtd').value) || 1;
   const produto = cardapioCache.find(p => p.id === produtoId);
   if(!produto){ mostrarToast('Busque e selecione um produto da lista antes de adicionar.', 'erro'); return; }
+  if(qtd <= 0){ mostrarToast('Quantidade precisa ser maior que zero.', 'erro'); return; }
   const existente = itensNovoPedido.find(i => i.produto_id === produtoId);
   if(existente) existente.quantidade += qtd;
   else itensNovoPedido.push({ produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd });
@@ -1113,21 +1166,25 @@ function renderizarItensNovoPedido(){
   document.getElementById('np-total').textContent = 'Total: ' + formatarReais(total);
 }
 
-async function salvarNovoPedido(){
+async function salvarNovoPedido(botao){
   if(itensNovoPedido.length === 0){ mostrarToast('Adicione pelo menos um item.', 'erro'); return; }
   const canal = document.getElementById('np-canal').value;
   const mesa = canal === 'mesa' ? document.getElementById('np-mesa').value.trim() : null;
 
-  const { data: pedido, error } = await db.from('pedidos')
-    .insert({ loja_id: meuPerfil.loja_id, canal, mesa, aberto_por: usuarioAtual.id })
-    .select().single();
-  if(error){ mostrarToast('Erro ao criar pedido: ' + error.message, 'erro'); return; }
+  const btn = travarBotao(botao);
+  if(!btn) return;
 
-  const itensParaInserir = itensNovoPedido.map(i => ({
-    pedido_id: pedido.id, produto_id: i.produto_id, quantidade: i.quantidade, preco_unit_no_momento: i.preco
-  }));
-  const { error: e2 } = await db.from('itens_pedido').insert(itensParaInserir);
-  if(e2){ mostrarToast('Erro ao salvar itens do pedido: ' + e2.message, 'erro'); return; }
+  // Grava o pedido inteiro (cabeçalho + itens) numa função só, dentro de uma
+  // transação atômica no banco — não manda mais o preço daqui, quem decide o
+  // preço gravado é o servidor, lendo direto de "produtos" (ver Migração 16).
+  // Isso fecha dois problemas: pedido "fantasma" sem item se a gravação
+  // caísse no meio, e a possibilidade de alguém manipular a chamada pra
+  // gravar um preço menor que o real.
+  const itensParaEnviar = itensNovoPedido.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade }));
+  const { data: pedido, error } = await db.rpc('criar_pedido_completo', {
+    p_canal: canal, p_mesa: mesa, p_itens: itensParaEnviar
+  });
+  if(error){ destravarBotao(btn); mostrarToast('Erro ao criar pedido: ' + error.message, 'erro'); return; }
 
   mostrarToast('Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' criado!', 'sucesso');
   fecharModal(); carregarPedidos();
@@ -1165,8 +1222,8 @@ async function abrirDetalhePedido(id){
         '</select>' +
         '<div id="dp-cliente-novo-wrap" style="display:none;"><input type="text" id="dp-cliente-novo" placeholder="Nome do novo cliente"></div>' +
       '</div>' +
-      '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Fechar e receber pagamento</button>' +
-      '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Cancelar pedido</button>'
+      '<button class="btn" style="width:100%;margin-top:12px;" onclick="finalizarPedido(this,' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Fechar e receber pagamento</button>' +
+      '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(this,' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Cancelar pedido</button>'
     ) : '')
   );
   if(finalizavel){
@@ -1182,23 +1239,27 @@ function selecionarFormaPagamento(botaoClicado, valor){
   document.getElementById('dp-cliente-wrap').style.display = valor === 'fiado' ? 'block' : 'none';
 }
 
-async function finalizarPedido(id, numeroDia){
+async function finalizarPedido(botao, id, numeroDia){
   const forma_pagamento = document.getElementById('dp-pagamento').value;
   let cliente_id = null;
+
+  const btn = travarBotao(botao);
+  if(!btn) return;
 
   if(forma_pagamento === 'fiado'){
     const selecionado = document.getElementById('dp-cliente').value;
     if(selecionado === '__novo__'){
       const nome = document.getElementById('dp-cliente-novo').value.trim();
-      if(!nome){ mostrarToast('Digite o nome do cliente pra registrar o fiado.', 'erro'); return; }
+      if(!nome){ destravarBotao(btn); mostrarToast('Digite o nome do cliente pra registrar o fiado.', 'erro'); return; }
       const { data: novoCliente, error: eCli } = await db.from('clientes')
         .insert({ loja_id: meuPerfil.loja_id, nome }).select().single();
-      if(eCli){ mostrarToast('Erro ao cadastrar cliente: ' + eCli.message, 'erro'); return; }
+      if(eCli){ destravarBotao(btn); mostrarToast('Erro ao cadastrar cliente: ' + eCli.message, 'erro'); return; }
       cliente_id = novoCliente.id;
       clientesCache.push(novoCliente);
     } else if(selecionado){
       cliente_id = Number(selecionado);
     } else {
+      destravarBotao(btn);
       mostrarToast('Selecione o cliente pra registrar o fiado.', 'erro'); return;
     }
   }
@@ -1206,14 +1267,16 @@ async function finalizarPedido(id, numeroDia){
   const { error } = await db.from('pedidos')
     .update({ status: 'finalizado', forma_pagamento, cliente_id, fechado_em: new Date().toISOString() })
     .eq('id', id);
-  if(error){ mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
+  if(error){ destravarBotao(btn); mostrarToast('Erro ao fechar pedido: ' + error.message, 'erro'); return; }
   mostrarToast(forma_pagamento === 'fiado' ? 'Pedido #' + numeroDia + ' fechado no fiado!' : 'Pedido #' + numeroDia + ' fechado!', 'sucesso');
   fecharModal(); carregarPedidos(); carregarInicio();
 }
 
-async function cancelarPedido(id, numeroDia){
+async function cancelarPedido(botao, id, numeroDia){
+  const btn = travarBotao(botao);
+  if(!btn) return;
   const { error } = await db.from('pedidos').update({ status: 'cancelado' }).eq('id', id);
-  if(error){ mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
+  if(error){ destravarBotao(btn); mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
   mostrarToast('Pedido #' + numeroDia + ' cancelado.', 'sucesso');
   fecharModal(); carregarPedidos();
 }
@@ -1292,6 +1355,8 @@ function abrirModalInsumo(){
   );
   document.getElementById('form-insumo').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('insumos').insert({
       loja_id: meuPerfil.loja_id,
       nome: document.getElementById('ins-nome').value.trim(),
@@ -1299,7 +1364,7 @@ function abrirModalInsumo(){
       nivel_minimo: Number(document.getElementById('ins-min').value),
       nivel_desejavel: Number(document.getElementById('ins-desej').value)
     });
-    if(error){ mostrarToast('Erro ao salvar insumo: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar insumo: ' + error.message, 'erro'); return; }
     mostrarToast('Insumo cadastrado!', 'sucesso');
     fecharModal(); carregarInsumos();
   });
@@ -1320,6 +1385,8 @@ function abrirModalMovimento(insumoId){
   );
   document.getElementById('form-movimento').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('insumo_movimentos').insert({
       loja_id: meuPerfil.loja_id, insumo_id: insumoId,
       tipo: document.getElementById('mov-tipo').value,
@@ -1327,7 +1394,7 @@ function abrirModalMovimento(insumoId){
       motivo: document.getElementById('mov-motivo').value.trim(),
       registrado_por: usuarioAtual.id
     });
-    if(error){ mostrarToast('Erro ao lançar movimento: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao lançar movimento: ' + error.message, 'erro'); return; }
     mostrarToast('Movimento lançado!', 'sucesso');
     fecharModal(); carregarInsumos(); carregarInicio();
   });
@@ -1365,10 +1432,12 @@ function abrirModalFornecedor(){
   );
   document.getElementById('form-fornecedor').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('fornecedores').insert({
       loja_id: meuPerfil.loja_id, nome: document.getElementById('forn-nome').value.trim()
     });
-    if(error){ mostrarToast('Erro ao salvar fornecedor: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar fornecedor: ' + error.message, 'erro'); return; }
     mostrarToast('Fornecedor cadastrado!', 'sucesso');
     fecharModal(); carregarFornecedores();
   });
@@ -1430,12 +1499,14 @@ function abrirModalCliente(){
   );
   document.getElementById('form-cliente').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('clientes').insert({
       loja_id: meuPerfil.loja_id,
       nome: document.getElementById('cli-nome').value.trim(),
       telefone: document.getElementById('cli-telefone').value.trim() || null
     });
-    if(error){ mostrarToast('Erro ao salvar cliente: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar cliente: ' + error.message, 'erro'); return; }
     mostrarToast('Cliente cadastrado!', 'sucesso');
     fecharModal(); await carregarClientesCache(); carregarFiados();
   });
@@ -1456,6 +1527,8 @@ function abrirModalPagamentoFiado(clienteId, nomeCliente){
   );
   document.getElementById('form-pagamento-fiado').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('fiado_pagamentos').insert({
       loja_id: meuPerfil.loja_id,
       cliente_id: clienteId,
@@ -1464,7 +1537,7 @@ function abrirModalPagamentoFiado(clienteId, nomeCliente){
       data: document.getElementById('pg-data').value,
       observacao: document.getElementById('pg-obs').value.trim() || null
     });
-    if(error){ mostrarToast('Erro ao registrar pagamento: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao registrar pagamento: ' + error.message, 'erro'); return; }
     mostrarToast('Pagamento registrado!', 'sucesso');
     fecharModal(); carregarFiados();
   });
@@ -1501,6 +1574,8 @@ function abrirModalDespesa(){
   );
   document.getElementById('form-despesa').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('despesas').insert({
       loja_id: meuPerfil.loja_id,
       fornecedor_id: Number(document.getElementById('desp-fornecedor').value) || null,
@@ -1509,7 +1584,7 @@ function abrirModalDespesa(){
       data: document.getElementById('desp-data').value,
       descricao: document.getElementById('desp-descricao').value.trim()
     });
-    if(error){ mostrarToast('Erro ao salvar despesa: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar despesa: ' + error.message, 'erro'); return; }
     mostrarToast('Despesa lançada!', 'sucesso');
     fecharModal(); carregarDespesas(); carregarInicio();
   });
@@ -1608,13 +1683,15 @@ function abrirModalConvite(){
   );
   document.getElementById('form-convite').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
     const { error } = await db.from('convites').insert({
       loja_id: meuPerfil.loja_id,
       email: document.getElementById('conv-email').value.trim(),
       role: document.getElementById('conv-role').value,
       criado_por: usuarioAtual.id
     });
-    if(error){ mostrarToast('Erro ao convidar: ' + error.message, 'erro'); return; }
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao convidar: ' + error.message, 'erro'); return; }
     mostrarToast('Convite criado!', 'sucesso');
     fecharModal(); carregarUsuarios();
   });
