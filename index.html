@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+undefined<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -366,7 +366,11 @@
     <!-- DESPESAS -->
     <section id="sec-despesas" style="display:none;">
       <h1>Despesas</h1>
-      <button class="btn" onclick="abrirModalDespesa()">+ Nova despesa</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn" onclick="abrirModalDespesa()">+ Nova despesa</button>
+        <button class="btn-secundario" id="btn-ler-cupom" onclick="document.getElementById('cupom-input').click()">📷 Ler cupom</button>
+        <input type="file" id="cupom-input" accept="image/*" capture="environment" style="display:none;" onchange="lerCupom(this.files[0])">
+      </div>
       <div class="cartao" style="margin-top:16px;">
         <table>
           <thead><tr><th>Data</th><th>Fornecedor</th><th>Valor</th><th>Pagamento</th></tr></thead>
@@ -1911,17 +1915,110 @@ async function carregarDespesas(){
   )).join('') || '<tr><td colspan="4" style="color:var(--cor-texto-suave);">Nenhuma despesa lançada ainda.</td></tr>';
 }
 
-function abrirModalDespesa(){
+// =========================================================================
+// LEITOR DE CUPOM (IA) — fotografa o cupom fiscal, a Vercel repassa a
+// imagem pro Gemini (Google) já com a chave escondida no servidor (ver
+// api/ler-cupom.js), e volta um rascunho de despesa. NADA é salvo sozinho:
+// só preenche o formulário, quem lançou revisa e aperta Salvar — cupom mal
+// fotografado ou mal lido vira só um formulário com valor errado que dá pra
+// corrigir na hora, não uma despesa fantasma no banco.
+// =========================================================================
+function comprimirImagemParaBase64(arquivo){
+  return new Promise((resolve, reject) => {
+    const leitor = new FileReader();
+    leitor.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+    leitor.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo não é uma imagem válida.'));
+      img.onload = () => {
+        // Reduz pro cupom não pesar no upload (celular tira foto enorme) e
+        // pra gastar menos na chamada da API — 1600px já é sobra pra OCR de
+        // um cupom fiscal, que é só texto pequeno numa folha estreita.
+        const maiorLado = 1600;
+        let { width, height } = img;
+        if(width > maiorLado || height > maiorLado){
+          const escala = maiorLado / Math.max(width, height);
+          width = Math.round(width * escala);
+          height = Math.round(height * escala);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82).split(',')[1]);
+      };
+      img.src = leitor.result;
+    };
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+async function lerCupom(arquivo){
+  if(!arquivo) return;
+  const btn = document.getElementById('btn-ler-cupom');
+  const input = document.getElementById('cupom-input');
+  if(btn){ btn.disabled = true; btn.textContent = 'Lendo cupom...'; }
+  try{
+    const imagemBase64 = await comprimirImagemParaBase64(arquivo);
+    const resposta = await fetch('/api/ler-cupom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imagemBase64, mimeType: 'image/jpeg' })
+    });
+    const resultado = await resposta.json().catch(() => null);
+    if(!resposta.ok || !resultado || !resultado.ok){
+      mostrarToast('Erro ao ler cupom: ' + (resultado && resultado.erro ? resultado.erro : 'tente novamente'), 'erro');
+      return;
+    }
+    abrirModalDespesa(resultado.dados);
+  } catch(err){
+    mostrarToast('Erro ao ler cupom: ' + err.message, 'erro');
+  } finally {
+    if(btn){ btn.disabled = false; btn.textContent = '📷 Ler cupom'; }
+    if(input) input.value = '';
+  }
+}
+
+function abrirModalDespesa(preenchimento){
+  const pf = preenchimento || {};
+
+  // O cupom traz o NOME do fornecedor em texto livre, mas o formulário
+  // guarda um fornecedor_id de um cadastro já existente — não dá pra criar
+  // fornecedor novo sozinho pelas costas de quem usa. Então tenta achar por
+  // nome parecido no que já está cadastrado; se não achar, deixa o campo em
+  // branco (opção "Selecionar..." abaixo) e avisa qual nome foi lido, pra
+  // pessoa decidir se cadastra ou escolhe outro fornecedor da lista.
+  let fornecedorSugeridoId = '';
+  let avisoFornecedor = '';
+  if(pf.fornecedor){
+    const alvo = normalizarBusca(pf.fornecedor);
+    const encontrado = fornecedoresCache.find(f => {
+      const nome = normalizarBusca(f.nome);
+      return nome === alvo || nome.includes(alvo) || alvo.includes(nome);
+    });
+    if(encontrado) fornecedorSugeridoId = String(encontrado.id);
+    else avisoFornecedor = pf.fornecedor;
+  }
+
+  const rotulosPagamento = { dinheiro: 'Dinheiro', pix: 'Pix', debito: 'Cartão Débito', credito: 'Cartão Crédito' };
+
   abrirModal(
     '<h2>Nova despesa</h2>' +
+    (avisoFornecedor ?
+      '<p style="background:#fff3cd;color:#7a5b00;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:10px;">Cupom lido: fornecedor "' + escHtml(avisoFornecedor) + '" não encontrado no cadastro. Selecione um da lista ou cadastre depois em Fornecedores.</p>'
+      : '') +
     '<form id="form-despesa">' +
       '<label>Fornecedor</label>' +
-      '<select id="desp-fornecedor">' + fornecedoresCache.map(f => '<option value="' + f.id + '">' + escHtml(f.nome) + '</option>').join('') + '</select>' +
-      '<label>Valor (R$)</label><input type="number" step="0.01" min="0" id="desp-valor" required>' +
+      '<select id="desp-fornecedor">' +
+        '<option value="">Selecionar...</option>' +
+        fornecedoresCache.map(f => '<option value="' + f.id + '"' + (String(f.id) === fornecedorSugeridoId ? ' selected' : '') + '>' + escHtml(f.nome) + '</option>').join('') +
+      '</select>' +
+      '<label>Valor (R$)</label><input type="number" step="0.01" min="0" id="desp-valor" value="' + (pf.valor != null ? Number(pf.valor).toFixed(2) : '') + '" required>' +
       '<label>Forma de pagamento</label>' +
-      '<select id="desp-pagamento"><option value="dinheiro">Dinheiro</option><option value="pix">Pix</option><option value="debito">Cartão Débito</option><option value="credito">Cartão Crédito</option></select>' +
-      '<label>Data</label><input type="date" id="desp-data" value="' + new Date().toISOString().slice(0,10) + '">' +
-      '<label>Descrição (opcional)</label><input type="text" id="desp-descricao">' +
+      '<select id="desp-pagamento">' +
+        Object.keys(rotulosPagamento).map(v => '<option value="' + v + '"' + (pf.forma_pagamento === v ? ' selected' : '') + '>' + rotulosPagamento[v] + '</option>').join('') +
+      '</select>' +
+      '<label>Data</label><input type="date" id="desp-data" value="' + (pf.data || new Date().toISOString().slice(0,10)) + '">' +
+      '<label>Descrição (opcional)</label><input type="text" id="desp-descricao" value="' + escHtml(pf.descricao || '') + '">' +
       '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
     '</form>'
   );
