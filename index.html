@@ -74,6 +74,10 @@
   #sidebar .nav-btn:hover{background:#332c23;}
   #sidebar .nav-btn.ativo{background:var(--cor-primaria);color:#fff;}
   #sidebar .loja-nome{font-size:12px;color:#9c9488;padding:0 8px 14px;border-bottom:1px solid #3a332a;margin-bottom:10px;}
+  /* Itens de uso esporádico (cadastro/configuração) só aparecem depois que a
+     pessoa clica em "☰ Mais" — ver alternarMenuSecundario(). */
+  #sidebar .nav-secundario{display:none;}
+  #sidebar.mostrar-secundarios .nav-secundario{display:block;}
   #sidebar .sair{margin-top:20px;border-top:1px solid #3a332a;padding-top:14px;}
   #conteudo{flex:1;padding:24px;max-width:1600px;width:100%;box-sizing:border-box;}
   #conteudo h1{font-size:22px;margin:0 0 18px;}
@@ -215,17 +219,25 @@
     <button class="nav-btn" data-aba="pedidos" onclick="trocarAba('pedidos')">🧾 Pedidos</button>
     <button class="nav-btn" data-aba="entradas" onclick="trocarAba('entradas')">💰 Entradas</button>
     <button class="nav-btn" data-aba="cozinha" onclick="trocarAba('cozinha')">🍳 Cozinha</button>
-    <button class="nav-btn" data-aba="cardapio" onclick="trocarAba('cardapio')">📋 Cardápio</button>
-    <button class="nav-btn" data-aba="estoque" onclick="trocarAba('estoque')">📦 Estoque</button>
-    <button class="nav-btn" data-aba="despesas" onclick="trocarAba('despesas')">💸 Despesas</button>
-    <button class="nav-btn" data-aba="fiados" onclick="trocarAba('fiados')">📒 Fiados</button>
-    <button class="nav-btn" data-aba="fornecedores" onclick="trocarAba('fornecedores')">🚚 Fornecedores</button>
     <button class="nav-btn" data-aba="relatorios" onclick="trocarAba('relatorios')">📊 Relatórios</button>
-    <button class="nav-btn" data-aba="usuarios" onclick="trocarAba('usuarios')">👥 Usuários</button>
-    <button class="nav-btn" data-aba="minha-loja" onclick="trocarAba('minha-loja')">🏪 Minha Loja</button>
+    <!-- O resto (uso menos frequente) fica escondido até clicar aqui — ver
+         alternarMenuSecundario(). Início/Pedidos/Entradas/Cozinha/Relatórios
+         são as telas do dia a dia; o resto é configuração/cadastro esporádico. -->
+    <button class="nav-btn" id="nav-toggle-secundarios" onclick="alternarMenuSecundario()">☰ Mais</button>
+    <button class="nav-btn nav-secundario" data-aba="cardapio" onclick="trocarAba('cardapio')">📋 Cardápio</button>
+    <button class="nav-btn nav-secundario" data-aba="estoque" onclick="trocarAba('estoque')">📦 Estoque</button>
+    <button class="nav-btn nav-secundario" data-aba="despesas" onclick="trocarAba('despesas')">💸 Despesas</button>
+    <button class="nav-btn nav-secundario" data-aba="fiados" onclick="trocarAba('fiados')">📒 Fiados</button>
+    <button class="nav-btn nav-secundario" data-aba="fornecedores" onclick="trocarAba('fornecedores')">🚚 Fornecedores</button>
+    <button class="nav-btn nav-secundario" data-aba="usuarios" onclick="trocarAba('usuarios')">👥 Usuários</button>
+    <button class="nav-btn nav-secundario" data-aba="minha-loja" onclick="trocarAba('minha-loja')">🏪 Minha Loja</button>
+    <!-- Master não leva a classe nav-secundario: a visibilidade dele é sempre
+         controlada via JS (alternarMenuSecundario), porque além de depender do
+         menu estar aberto, só deve aparecer pra quem é admin — ver comentário
+         lá na função. -->
     <button class="nav-btn" data-aba="master" id="nav-master" onclick="trocarAba('master')" style="display:none;">🛡️ Master</button>
+    <button class="nav-btn nav-secundario" onclick="abrirModalConfiguracoes()">⚙️ Configurações</button>
     <div class="sair">
-      <button class="nav-btn" onclick="abrirModalConfiguracoes()">⚙️ Configurações</button>
       <button class="nav-btn" onclick="sair()">🚪 Sair</button>
     </div>
   </nav>
@@ -244,11 +256,20 @@
       <div class="stats-row" id="inicio-stats"></div>
       <div class="cartao">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-          <strong>Vendas x despesas — últimos 7 dias</strong>
+          <strong>Vendas x despesas</strong>
           <div style="font-size:12px;color:var(--cor-texto-suave);display:flex;gap:14px;">
             <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-verde);border-radius:2px;margin-right:5px;"></span>Vendido</span>
             <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-vermelho);border-radius:2px;margin-right:5px;"></span>Despesas</span>
           </div>
+        </div>
+        <div class="forma-pagamento-botoes" id="grafico-periodos" style="margin-top:10px;">
+          <button class="forma-btn" data-periodo="hoje" onclick="carregarGraficoInicio('hoje')">Hoje</button>
+          <button class="forma-btn" data-periodo="ontem" onclick="carregarGraficoInicio('ontem')">Ontem</button>
+          <button class="forma-btn selecionada" data-periodo="7dias" onclick="carregarGraficoInicio('7dias')">7 dias</button>
+          <button class="forma-btn" data-periodo="30dias" onclick="carregarGraficoInicio('30dias')">30 dias</button>
+          <button class="forma-btn" data-periodo="3meses" onclick="carregarGraficoInicio('3meses')">3 meses</button>
+          <button class="forma-btn" data-periodo="6meses" onclick="carregarGraficoInicio('6meses')">6 meses</button>
+          <button class="forma-btn" data-periodo="1ano" onclick="carregarGraficoInicio('1ano')">1 ano</button>
         </div>
         <div style="position:relative;">
           <canvas id="inicio-grafico" style="width:100%;height:220px;margin-top:10px;"></canvas>
@@ -696,7 +717,8 @@ async function entrarNoApp(){
   }
   document.getElementById('app').style.display = 'flex';
   document.getElementById('sidebar-loja-nome').textContent = loja.nome;
-  document.getElementById('nav-master').style.display = meuPerfil.is_admin ? 'block' : 'none';
+  // Master começa escondido (o menu "☰ Mais" começa fechado) — quem for admin
+  // só vê o botão depois de abrir o menu secundário. Ver alternarMenuSecundario().
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
   assinarRealtimePedidos();
@@ -725,6 +747,22 @@ function trocarAba(aba){
   if(aba === 'usuarios') carregarUsuarios();
   if(aba === 'minha-loja') carregarMinhaLoja();
   if(aba === 'master') carregarMaster();
+}
+
+// Menu "☰ Mais": só os itens do dia a dia (Início/Pedidos/Entradas/Cozinha/
+// Relatórios) ficam sempre visíveis; o resto (cadastros e configuração, usados
+// bem menos) fica escondido até a pessoa clicar aqui. Master é um caso à parte
+// dentro desse grupo: além de só aparecer com o menu aberto, só aparece pra
+// quem é admin — por isso não leva a classe .nav-secundario (que é só CSS) e é
+// controlado direto aqui, nos dois critérios ao mesmo tempo.
+function alternarMenuSecundario(){
+  const sidebar = document.getElementById('sidebar');
+  const abrir = !sidebar.classList.contains('mostrar-secundarios');
+  sidebar.classList.toggle('mostrar-secundarios', abrir);
+  const btnMaster = document.getElementById('nav-master');
+  if(btnMaster) btnMaster.style.display = (abrir && meuPerfil && meuPerfil.is_admin) ? 'block' : 'none';
+  const btnToggle = document.getElementById('nav-toggle-secundarios');
+  if(btnToggle) btnToggle.textContent = abrir ? '✕ Menos' : '☰ Mais';
 }
 
 // =========================================================================
@@ -894,27 +932,98 @@ async function carregarInicio(){
     ? estoqueBaixo.map(i => '<tr><td>' + escHtml(i.nome) + '</td><td>' + i.saldo + ' ' + i.unidade_medida + '</td></tr>').join('')
     : '<tr><td colspan="2" style="color:var(--cor-texto-suave);">Nenhum insumo abaixo do nível mínimo 🎉</td></tr>';
 
-  // Monta os dados dia a dia (últimos 7 dias, do mais antigo pro mais recente) pro gráfico
-  const dias = [];
-  for(let i = 6; i >= 0; i--){
-    const d = new Date(agora);
-    d.setDate(d.getDate() - i);
-    dias.push(dataLocalISO(d));
-  }
-  const vendasPorDia = {};
-  finalizadosSemana.forEach(p => {
-    const dia = dataLocalISO(p.criado_em);
-    vendasPorDia[dia] = (vendasPorDia[dia] || 0) + Number(p.total);
-  });
-  const despesasPorDia = {};
-  (despesasSemana || []).forEach(d => { despesasPorDia[d.data] = (despesasPorDia[d.data] || 0) + Number(d.valor); });
+  // O gráfico tem período próprio, selecionável pelos botões acima dele — não
+  // depende mais do "últimos 7 dias" fixo usado nos cards acima. Ver
+  // carregarGraficoInicio(). periodoGraficoAtual guarda a última escolha da
+  // pessoa nessa sessão (começa em '7dias').
+  carregarGraficoInicio(periodoGraficoAtual);
+}
 
-  const dadosGrafico = dias.map(dia => ({
-    rotulo: new Date(dia + 'T00:00:00').toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' }),
-    vendas: vendasPorDia[dia] || 0,
-    despesas: despesasPorDia[dia] || 0
-  }));
-  desenharGraficoSemana(dadosGrafico);
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+let periodoGraficoAtual = '7dias';
+
+// Calcula o intervalo [início, fim] (objetos Date, à meia-noite local) pro
+// período escolhido no gráfico do Início.
+function calcularIntervaloGrafico(periodo){
+  const hoje = new Date();
+  const d = new Date(hoje);
+  if(periodo === 'ontem'){ d.setDate(d.getDate() - 1); return { inicio: new Date(d), fim: new Date(d) }; }
+  if(periodo === '7dias'){ d.setDate(d.getDate() - 6); return { inicio: d, fim: hoje }; }
+  if(periodo === '30dias'){ d.setDate(d.getDate() - 29); return { inicio: d, fim: hoje }; }
+  if(periodo === '3meses'){ d.setMonth(d.getMonth() - 3); return { inicio: d, fim: hoje }; }
+  if(periodo === '6meses'){ d.setMonth(d.getMonth() - 6); return { inicio: d, fim: hoje }; }
+  if(periodo === '1ano'){ d.setFullYear(d.getFullYear() - 1); return { inicio: d, fim: hoje }; }
+  return { inicio: hoje, fim: hoje }; // 'hoje' (e qualquer valor inesperado)
+}
+
+// Busca pedidos finalizados + despesas no período escolhido e redesenha o
+// gráfico. Períodos curtos (até 30 dias) agrupam por dia, como antes; períodos
+// de meses agrupam por mês — senão "1 ano" viraria 365 barrinhas ilegíveis.
+async function carregarGraficoInicio(periodo){
+  periodoGraficoAtual = periodo;
+  document.querySelectorAll('#grafico-periodos .forma-btn').forEach(b => b.classList.toggle('selecionada', b.dataset.periodo === periodo));
+
+  const { inicio, fim } = calcularIntervaloGrafico(periodo);
+  const inicioStr = dataLocalISO(inicio);
+  const fimStr = dataLocalISO(fim);
+  const porMes = periodo === '3meses' || periodo === '6meses' || periodo === '1ano';
+
+  const { data: pedidos, error: e1 } = await db.from('pedidos')
+    .select('total, criado_em')
+    .eq('loja_id', meuPerfil.loja_id).eq('status', 'finalizado')
+    .gte('criado_em', inicioStr + 'T00:00:00').lte('criado_em', fimStr + 'T23:59:59');
+  if(e1){ mostrarToast('Erro ao carregar gráfico: ' + e1.message, 'erro'); return; }
+
+  const { data: despesas, error: e2 } = await db.from('despesas')
+    .select('valor, data').eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicioStr).lte('data', fimStr);
+  if(e2){ mostrarToast('Erro ao carregar gráfico: ' + e2.message, 'erro'); return; }
+
+  const chaveDia = iso => iso;
+  const chaveMes = iso => iso.slice(0, 7);
+  const chaveDe = porMes ? chaveMes : chaveDia;
+
+  const vendasPorChave = {};
+  (pedidos || []).forEach(p => {
+    const chave = chaveDe(dataLocalISO(p.criado_em));
+    vendasPorChave[chave] = (vendasPorChave[chave] || 0) + Number(p.total);
+  });
+  const despesasPorChave = {};
+  (despesas || []).forEach(d => {
+    const chave = chaveDe(d.data);
+    despesasPorChave[chave] = (despesasPorChave[chave] || 0) + Number(d.valor);
+  });
+
+  // Monta a lista de "baldes" (um por dia ou um por mês, conforme o período)
+  // entre início e fim, na ordem certa — inclusive os que não tiveram nenhuma
+  // venda/despesa (aparecem como barra zerada, não somem do eixo).
+  const baldes = [];
+  if(porMes){
+    const cursor = new Date(inicio.getFullYear(), inicio.getMonth(), 1);
+    const limite = new Date(fim.getFullYear(), fim.getMonth(), 1);
+    while(cursor <= limite){
+      baldes.push({
+        chave: cursor.getFullYear() + '-' + String(cursor.getMonth() + 1).padStart(2, '0'),
+        rotulo: MESES_ABREV[cursor.getMonth()] + '/' + String(cursor.getFullYear()).slice(2)
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  } else {
+    const cursor = new Date(inicio);
+    while(cursor <= fim){
+      baldes.push({
+        chave: dataLocalISO(cursor),
+        rotulo: String(cursor.getDate()).padStart(2, '0') + '/' + String(cursor.getMonth() + 1).padStart(2, '0')
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  desenharGraficoSemana(baldes.map(b => ({
+    rotulo: b.rotulo,
+    vendas: vendasPorChave[b.chave] || 0,
+    despesas: despesasPorChave[b.chave] || 0
+  })));
 }
 
 // Guarda a posição (em pixels do canvas) de cada barra desenhada por último,
@@ -949,6 +1058,12 @@ function desenharGraficoSemana(dados){
   ctx.textAlign = 'center';
   ctx.fillStyle = '#6b6b6b';
 
+  // Com período longo (ex.: "30 dias") dá muita barra pra pouco espaço — escrever
+  // rótulo embaixo de cada uma vira uma mancha ilegível. Mostra no máximo ~10,
+  // sempre incluindo a última (mais recente).
+  const maxRotulos = 10;
+  const passoRotulo = Math.max(1, Math.ceil(dados.length / maxRotulos));
+
   graficoSemanaBarras = [];
   dados.forEach((d, i) => {
     const centroX = larguraGrupo * i + larguraGrupo / 2;
@@ -963,8 +1078,10 @@ function desenharGraficoSemana(dados){
     ctx.fillStyle = corDespesas;
     ctx.fillRect(xDespesas, baseY - alturaDespesas, larguraBarra, alturaDespesas);
 
-    ctx.fillStyle = '#6b6b6b';
-    ctx.fillText(d.rotulo, centroX, alturaCss - 8);
+    if(i % passoRotulo === 0 || i === dados.length - 1){
+      ctx.fillStyle = '#6b6b6b';
+      ctx.fillText(d.rotulo, centroX, alturaCss - 8);
+    }
 
     graficoSemanaBarras.push({ x: xVendas, y: baseY - Math.max(alturaVendas, alturaMinHover), w: larguraBarra, h: Math.max(alturaVendas, alturaMinHover), rotulo: d.rotulo, tipo: 'Vendido', valor: d.vendas });
     graficoSemanaBarras.push({ x: xDespesas, y: baseY - Math.max(alturaDespesas, alturaMinHover), w: larguraBarra, h: Math.max(alturaDespesas, alturaMinHover), rotulo: d.rotulo, tipo: 'Despesas', valor: d.despesas });
