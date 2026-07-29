@@ -250,7 +250,10 @@
             <span><span style="display:inline-block;width:10px;height:10px;background:var(--cor-vermelho);border-radius:2px;margin-right:5px;"></span>Despesas</span>
           </div>
         </div>
-        <canvas id="inicio-grafico" style="width:100%;height:220px;margin-top:10px;"></canvas>
+        <div style="position:relative;">
+          <canvas id="inicio-grafico" style="width:100%;height:220px;margin-top:10px;"></canvas>
+          <div id="grafico-tooltip" style="position:absolute;display:none;pointer-events:none;background:#2b2b2b;color:#fff;font-size:12px;padding:6px 10px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-100%);z-index:10;"></div>
+        </div>
       </div>
       <div class="cartao">
         <strong>Insumos com estoque baixo</strong>
@@ -696,7 +699,7 @@ async function entrarNoApp(){
   document.getElementById('nav-master').style.display = meuPerfil.is_admin ? 'block' : 'none';
   await Promise.all([carregarCardapioCache(), carregarFornecedoresCache(), carregarClientesCache()]);
   trocarAba('inicio');
-  assinarRealtimeCozinha();
+  assinarRealtimePedidos();
   iniciarRelogioInicio();
 }
 
@@ -914,6 +917,10 @@ async function carregarInicio(){
   desenharGraficoSemana(dadosGrafico);
 }
 
+// Guarda a posição (em pixels do canvas) de cada barra desenhada por último,
+// pra achar qual está sob o mouse no hover — ver configurarTooltipGrafico().
+let graficoSemanaBarras = [];
+
 function desenharGraficoSemana(dados){
   const canvas = document.getElementById('inicio-grafico');
   if(!canvas) return;
@@ -929,6 +936,9 @@ function desenharGraficoSemana(dados){
   const alturaUtil = alturaCss - margemBaixo - margemCima;
   const larguraGrupo = larguraCss / dados.length;
   const larguraBarra = Math.min(26, larguraGrupo / 3.4);
+  const baseY = alturaCss - margemBaixo;
+  // Área mínima de hover, mesmo pra barra de valor R$0 (que na tela é invisível).
+  const alturaMinHover = 6;
 
   // Fixo — não acompanha a cor de destaque escolhida pela pessoa, pra manter
   // sempre o mesmo significado visual (verde = venda, vermelho = despesa).
@@ -939,20 +949,49 @@ function desenharGraficoSemana(dados){
   ctx.textAlign = 'center';
   ctx.fillStyle = '#6b6b6b';
 
+  graficoSemanaBarras = [];
   dados.forEach((d, i) => {
     const centroX = larguraGrupo * i + larguraGrupo / 2;
     const alturaVendas = (d.vendas / maiorValor) * alturaUtil;
     const alturaDespesas = (d.despesas / maiorValor) * alturaUtil;
+    const xVendas = centroX - larguraBarra - 2;
+    const xDespesas = centroX + 2;
 
     ctx.fillStyle = corVendas;
-    ctx.fillRect(centroX - larguraBarra - 2, alturaCss - margemBaixo - alturaVendas, larguraBarra, alturaVendas);
+    ctx.fillRect(xVendas, baseY - alturaVendas, larguraBarra, alturaVendas);
 
     ctx.fillStyle = corDespesas;
-    ctx.fillRect(centroX + 2, alturaCss - margemBaixo - alturaDespesas, larguraBarra, alturaDespesas);
+    ctx.fillRect(xDespesas, baseY - alturaDespesas, larguraBarra, alturaDespesas);
 
     ctx.fillStyle = '#6b6b6b';
     ctx.fillText(d.rotulo, centroX, alturaCss - 8);
+
+    graficoSemanaBarras.push({ x: xVendas, y: baseY - Math.max(alturaVendas, alturaMinHover), w: larguraBarra, h: Math.max(alturaVendas, alturaMinHover), rotulo: d.rotulo, tipo: 'Vendido', valor: d.vendas });
+    graficoSemanaBarras.push({ x: xDespesas, y: baseY - Math.max(alturaDespesas, alturaMinHover), w: larguraBarra, h: Math.max(alturaDespesas, alturaMinHover), rotulo: d.rotulo, tipo: 'Despesas', valor: d.despesas });
   });
+
+  configurarTooltipGrafico(canvas);
+}
+
+// Só liga os listeners uma vez (o canvas é reaproveitado a cada redesenho —
+// religar de novo a cada chamada ia empilhar handlers duplicados).
+function configurarTooltipGrafico(canvas){
+  if(canvas.dataset.tooltipLigado) return;
+  canvas.dataset.tooltipLigado = '1';
+  const tooltip = document.getElementById('grafico-tooltip');
+  if(!tooltip) return;
+  canvas.addEventListener('mousemove', (ev) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+    const barra = graficoSemanaBarras.find(b => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h);
+    if(!barra){ tooltip.style.display = 'none'; return; }
+    tooltip.textContent = barra.rotulo + ' · ' + barra.tipo + ': ' + formatarReais(barra.valor);
+    tooltip.style.left = (ev.clientX - rect.left) + 'px';
+    tooltip.style.top = (ev.clientY - rect.top) + 'px';
+    tooltip.style.display = 'block';
+  });
+  canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
 }
 
 function statCard(rotulo, valor){
@@ -1500,8 +1539,16 @@ async function marcarPedidoPronto(id){
   carregarCozinha();
 }
 
-function assinarRealtimeCozinha(){
-  const atualizarSeVisivel = () => { if(document.getElementById('sec-cozinha').style.display !== 'none') carregarCozinha(); };
+function assinarRealtimePedidos(){
+  // Um canal só pra tudo relacionado a pedido: atualiza Cozinha E Pedidos
+  // sozinho quando alguém (na mesma tela ou em outro dispositivo) cria um
+  // pedido, marca como pronto, fecha ou cancela — sem precisar apertar F5.
+  // Cada tela só recarrega se estiver com display !== 'none', pra não gastar
+  // requisição atualizando uma aba que ninguém está olhando.
+  const atualizarSeVisivel = () => {
+    if(document.getElementById('sec-cozinha').style.display !== 'none') carregarCozinha();
+    if(document.getElementById('sec-pedidos').style.display !== 'none') carregarPedidos();
+  };
   db.channel('pedidos-realtime')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: 'loja_id=eq.' + meuPerfil.loja_id },
       atualizarSeVisivel)
