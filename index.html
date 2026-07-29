@@ -303,7 +303,7 @@
       <div class="stats-row" id="entradas-stats"></div>
       <div class="cartao">
         <table>
-          <thead><tr><th>Forma</th><th>Lançado manual</th><th>Pedidos do sistema</th><th>Total</th></tr></thead>
+          <thead><tr><th>Forma</th><th>Lançado manual</th><th>Pedidos do sistema</th><th>Fiado recebido</th><th>Total</th></tr></thead>
           <tbody id="entradas-tabela"></tbody>
         </table>
       </div>
@@ -1413,34 +1413,43 @@ async function carregarRelatorioEntradas(){
 
   // Mesmo critério da aba Relatórios: só pedido FINALIZADO conta como venda do
   // período, e forma_pagamento 'fiado' fica de fora daqui — fiado é venda, mas
-  // não é dinheiro que entrou no caixa (isso só acontece quando o fiado é pago,
-  // e hoje o sistema ainda não soma pagamento de fiado em nenhum relatório —
-  // ver aviso na resposta sobre isso).
+  // não é dinheiro que entrou no caixa. O dinheiro só entra de fato quando o
+  // fiado é pago (baixa), e isso é contado à parte logo abaixo — pela DATA DO
+  // PAGAMENTO, não pela data da venda original, porque é nesse dia que o
+  // caixa efetivamente recebe o valor.
   const { data: pedidos, error: e2 } = await db.from('pedidos')
     .select('total, forma_pagamento').eq('loja_id', meuPerfil.loja_id).eq('status', 'finalizado')
     .gte('criado_em', inicio + 'T00:00:00').lte('criado_em', fim + 'T23:59:59');
   if(e2){ mostrarToast('Erro ao gerar relatório: ' + e2.message, 'erro'); return; }
 
-  const porFormaManual = {}, porFormaPedidos = {};
+  const { data: fiados, error: e3 } = await db.from('fiado_pagamentos')
+    .select('valor, forma_pagamento').eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicio).lte('data', fim);
+  if(e3){ mostrarToast('Erro ao gerar relatório: ' + e3.message, 'erro'); return; }
+
+  const porFormaManual = {}, porFormaPedidos = {}, porFormaFiado = {};
   (manuais || []).forEach(l => { porFormaManual[l.forma_pagamento] = (porFormaManual[l.forma_pagamento] || 0) + Number(l.valor); });
   (pedidos || []).forEach(p => {
     if(p.forma_pagamento === 'fiado') return;
     porFormaPedidos[p.forma_pagamento] = (porFormaPedidos[p.forma_pagamento] || 0) + Number(p.total);
   });
+  (fiados || []).forEach(f => { porFormaFiado[f.forma_pagamento] = (porFormaFiado[f.forma_pagamento] || 0) + Number(f.valor); });
 
   const formas = ['dinheiro','pix','debito','credito'];
-  let totalManual = 0, totalPedidos = 0;
+  let totalManual = 0, totalPedidos = 0, totalFiado = 0;
   document.getElementById('entradas-tabela').innerHTML = formas.map(forma => {
     const manual = porFormaManual[forma] || 0;
     const doSistema = porFormaPedidos[forma] || 0;
-    totalManual += manual; totalPedidos += doSistema;
-    return '<tr><td>' + ROTULOS_FORMA_PAGAMENTO[forma] + '</td><td>' + formatarReais(manual) + '</td><td>' + formatarReais(doSistema) + '</td><td style="font-weight:700;">' + formatarReais(manual + doSistema) + '</td></tr>';
+    const fiado = porFormaFiado[forma] || 0;
+    totalManual += manual; totalPedidos += doSistema; totalFiado += fiado;
+    return '<tr><td>' + ROTULOS_FORMA_PAGAMENTO[forma] + '</td><td>' + formatarReais(manual) + '</td><td>' + formatarReais(doSistema) + '</td><td>' + formatarReais(fiado) + '</td><td style="font-weight:700;">' + formatarReais(manual + doSistema + fiado) + '</td></tr>';
   }).join('');
 
   document.getElementById('entradas-stats').innerHTML =
     statCard('Lançado manual', formatarReais(totalManual)) +
     statCard('Pedidos do sistema', formatarReais(totalPedidos)) +
-    statCard('Total do período', formatarReais(totalManual + totalPedidos));
+    statCard('Fiado recebido', formatarReais(totalFiado)) +
+    statCard('Total do período', formatarReais(totalManual + totalPedidos + totalFiado));
 }
 
 // =========================================================================
