@@ -213,6 +213,7 @@
     <div class="loja-nome" id="sidebar-loja-nome">—</div>
     <button class="nav-btn" data-aba="inicio" onclick="trocarAba('inicio')">🏠 Início</button>
     <button class="nav-btn" data-aba="pedidos" onclick="trocarAba('pedidos')">🧾 Pedidos</button>
+    <button class="nav-btn" data-aba="entradas" onclick="trocarAba('entradas')">💰 Entradas</button>
     <button class="nav-btn" data-aba="cozinha" onclick="trocarAba('cozinha')">🍳 Cozinha</button>
     <button class="nav-btn" data-aba="cardapio" onclick="trocarAba('cardapio')">📋 Cardápio</button>
     <button class="nav-btn" data-aba="estoque" onclick="trocarAba('estoque')">📦 Estoque</button>
@@ -265,6 +266,45 @@
         <table>
           <thead><tr><th>#</th><th>Data</th><th>Canal</th><th>Status</th><th>Total</th><th></th></tr></thead>
           <tbody id="pedidos-tabela"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ENTRADAS (lançamento manual de venda do dia, pra loja que não quiser
+         usar a tela de Pedidos — do jeito que era feito na planilha) -->
+    <section id="sec-entradas" style="display:none;">
+      <h1>Entradas</h1>
+      <div class="cartao">
+        <p style="color:var(--cor-texto-suave);font-size:13px;margin-top:-6px;">Lance aqui o total vendido no dia, por forma de pagamento — sem precisar criar cada pedido individual. Some automaticamente com os pedidos fechados pelo sistema no relatório abaixo.</p>
+        <label>Data</label>
+        <input type="date" id="ent-data" onchange="carregarEntradaDoDia()">
+        <div class="linha" style="margin-top:10px;">
+          <div><label>💵 Dinheiro (R$)</label><input type="number" step="0.01" min="0" id="ent-dinheiro" value="0"></div>
+          <div><label>⚡ Pix (R$)</label><input type="number" step="0.01" min="0" id="ent-pix" value="0"></div>
+          <div><label>🏧 Débito (R$)</label><input type="number" step="0.01" min="0" id="ent-debito" value="0"></div>
+          <div><label>💳 Crédito (R$)</label><input type="number" step="0.01" min="0" id="ent-credito" value="0"></div>
+        </div>
+        <button class="btn" style="width:100%;margin-top:14px;" onclick="salvarEntradaManual(this)">Salvar entradas do dia</button>
+      </div>
+
+      <div class="cartao">
+        <label>Período do relatório</label>
+        <div class="forma-pagamento-botoes" id="ent-atalhos">
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoEntradas('dia', this)">Dia</button>
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoEntradas('semana', this)">Semana</button>
+          <button type="button" class="forma-btn" onclick="aplicarAtalhoEntradas('mes', this)">Mês</button>
+        </div>
+        <div class="linha" style="margin-top:14px;">
+          <div><label>De</label><input type="date" id="ent-rel-inicio" oninput="limparAtalhoEntradasSelecionado()"></div>
+          <div><label>Até</label><input type="date" id="ent-rel-fim" oninput="limparAtalhoEntradasSelecionado()"></div>
+          <div style="display:flex;align-items:flex-end;"><button class="btn" onclick="carregarRelatorioEntradas()">Gerar</button></div>
+        </div>
+      </div>
+      <div class="stats-row" id="entradas-stats"></div>
+      <div class="cartao">
+        <table>
+          <thead><tr><th>Forma</th><th>Lançado manual</th><th>Pedidos do sistema</th><th>Total</th></tr></thead>
+          <tbody id="entradas-tabela"></tbody>
         </table>
       </div>
     </section>
@@ -672,6 +712,7 @@ function trocarAba(aba){
 
   if(aba === 'inicio') carregarInicio();
   if(aba === 'pedidos') carregarPedidos();
+  if(aba === 'entradas') carregarEntradas();
   if(aba === 'cozinha') carregarCozinha();
   if(aba === 'cardapio') carregarProdutos();
   if(aba === 'estoque') carregarInsumos();
@@ -1279,6 +1320,127 @@ async function cancelarPedido(botao, id, numeroDia){
   if(error){ destravarBotao(btn); mostrarToast('Erro ao cancelar pedido: ' + error.message, 'erro'); return; }
   mostrarToast('Pedido #' + numeroDia + ' cancelado.', 'sucesso');
   fecharModal(); carregarPedidos();
+}
+
+// =========================================================================
+// ENTRADAS (lançamento manual — alternativa a criar pedido por pedido)
+// =========================================================================
+const ROTULOS_FORMA_PAGAMENTO = { dinheiro: '💵 Dinheiro', pix: '⚡ Pix', debito: '🏧 Débito', credito: '💳 Crédito' };
+
+async function carregarEntradas(){
+  document.getElementById('ent-data').value = dataLocalISO(new Date());
+  await carregarEntradaDoDia();
+  const btnDia = document.querySelector('#ent-atalhos .forma-btn');
+  if(btnDia) aplicarAtalhoEntradas('dia', btnDia);
+}
+
+async function carregarEntradaDoDia(){
+  const data = document.getElementById('ent-data').value;
+  if(!data) return;
+  const { data: linhas, error } = await db.from('entradas_manuais')
+    .select('forma_pagamento, valor').eq('loja_id', meuPerfil.loja_id).eq('data', data);
+  if(error){ mostrarToast('Erro ao carregar entradas do dia: ' + error.message, 'erro'); return; }
+  const porForma = {};
+  (linhas || []).forEach(l => { porForma[l.forma_pagamento] = Number(l.valor); });
+  document.getElementById('ent-dinheiro').value = porForma.dinheiro || 0;
+  document.getElementById('ent-pix').value = porForma.pix || 0;
+  document.getElementById('ent-debito').value = porForma.debito || 0;
+  document.getElementById('ent-credito').value = porForma.credito || 0;
+}
+
+async function salvarEntradaManual(botao){
+  const data = document.getElementById('ent-data').value;
+  if(!data){ mostrarToast('Escolha a data.', 'erro'); return; }
+  const valores = {
+    dinheiro: Number(document.getElementById('ent-dinheiro').value) || 0,
+    pix: Number(document.getElementById('ent-pix').value) || 0,
+    debito: Number(document.getElementById('ent-debito').value) || 0,
+    credito: Number(document.getElementById('ent-credito').value) || 0
+  };
+  if(Object.values(valores).some(v => v < 0)){ mostrarToast('Valores não podem ser negativos.', 'erro'); return; }
+
+  const btn = travarBotao(botao);
+  if(!btn) return;
+
+  const linhas = Object.keys(valores).map(forma => ({
+    loja_id: meuPerfil.loja_id, data, forma_pagamento: forma, valor: valores[forma],
+    atualizado_por: usuarioAtual.id, atualizado_em: new Date().toISOString()
+  }));
+  const { error } = await db.from('entradas_manuais')
+    .upsert(linhas, { onConflict: 'loja_id,data,forma_pagamento' });
+  // Diferente dos formulários em modal, essa tela não fecha sozinha depois de
+  // salvar — por isso destrava o botão tanto no erro quanto no sucesso, senão
+  // ele ficava travado pra sempre depois do primeiro uso.
+  destravarBotao(btn);
+  if(error){ mostrarToast('Erro ao salvar entradas: ' + error.message, 'erro'); return; }
+  mostrarToast('Entradas do dia salvas!', 'sucesso');
+  carregarRelatorioEntradas();
+}
+
+function aplicarAtalhoEntradas(tipo, botaoClicado){
+  const hoje = new Date();
+  let inicio, fim;
+  if(tipo === 'dia'){
+    inicio = fim = dataLocalISO(hoje);
+  } else if(tipo === 'semana'){
+    const seteDiasAtras = new Date(hoje); seteDiasAtras.setDate(seteDiasAtras.getDate() - 6);
+    inicio = dataLocalISO(seteDiasAtras); fim = dataLocalISO(hoje);
+  } else if(tipo === 'mes'){
+    inicio = dataLocalISO(hoje).slice(0, 7) + '-01'; fim = dataLocalISO(hoje);
+  } else {
+    return;
+  }
+  document.getElementById('ent-rel-inicio').value = inicio;
+  document.getElementById('ent-rel-fim').value = fim;
+  document.querySelectorAll('#ent-atalhos .forma-btn').forEach(b => b.classList.remove('selecionada'));
+  botaoClicado.classList.add('selecionada');
+  carregarRelatorioEntradas();
+}
+
+function limparAtalhoEntradasSelecionado(){
+  document.querySelectorAll('#ent-atalhos .forma-btn').forEach(b => b.classList.remove('selecionada'));
+}
+
+async function carregarRelatorioEntradas(){
+  const inicio = document.getElementById('ent-rel-inicio').value;
+  const fim = document.getElementById('ent-rel-fim').value;
+  if(!inicio || !fim){ mostrarToast('Escolha o período.', 'erro'); return; }
+
+  const { data: manuais, error: e1 } = await db.from('entradas_manuais')
+    .select('forma_pagamento, valor').eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicio).lte('data', fim);
+  if(e1){ mostrarToast('Erro ao gerar relatório: ' + e1.message, 'erro'); return; }
+
+  // Mesmo critério da aba Relatórios: só pedido FINALIZADO conta como venda do
+  // período, e forma_pagamento 'fiado' fica de fora daqui — fiado é venda, mas
+  // não é dinheiro que entrou no caixa (isso só acontece quando o fiado é pago,
+  // e hoje o sistema ainda não soma pagamento de fiado em nenhum relatório —
+  // ver aviso na resposta sobre isso).
+  const { data: pedidos, error: e2 } = await db.from('pedidos')
+    .select('total, forma_pagamento').eq('loja_id', meuPerfil.loja_id).eq('status', 'finalizado')
+    .gte('criado_em', inicio + 'T00:00:00').lte('criado_em', fim + 'T23:59:59');
+  if(e2){ mostrarToast('Erro ao gerar relatório: ' + e2.message, 'erro'); return; }
+
+  const porFormaManual = {}, porFormaPedidos = {};
+  (manuais || []).forEach(l => { porFormaManual[l.forma_pagamento] = (porFormaManual[l.forma_pagamento] || 0) + Number(l.valor); });
+  (pedidos || []).forEach(p => {
+    if(p.forma_pagamento === 'fiado') return;
+    porFormaPedidos[p.forma_pagamento] = (porFormaPedidos[p.forma_pagamento] || 0) + Number(p.total);
+  });
+
+  const formas = ['dinheiro','pix','debito','credito'];
+  let totalManual = 0, totalPedidos = 0;
+  document.getElementById('entradas-tabela').innerHTML = formas.map(forma => {
+    const manual = porFormaManual[forma] || 0;
+    const doSistema = porFormaPedidos[forma] || 0;
+    totalManual += manual; totalPedidos += doSistema;
+    return '<tr><td>' + ROTULOS_FORMA_PAGAMENTO[forma] + '</td><td>' + formatarReais(manual) + '</td><td>' + formatarReais(doSistema) + '</td><td style="font-weight:700;">' + formatarReais(manual + doSistema) + '</td></tr>';
+  }).join('');
+
+  document.getElementById('entradas-stats').innerHTML =
+    statCard('Lançado manual', formatarReais(totalManual)) +
+    statCard('Pedidos do sistema', formatarReais(totalPedidos)) +
+    statCard('Total do período', formatarReais(totalManual + totalPedidos));
 }
 
 // =========================================================================
