@@ -733,6 +733,13 @@ async function entrarNoApp(){
 // NAVEGAÇÃO
 // =========================================================================
 function trocarAba(aba){
+  // Fecha o menu "Mais" ao escolher qualquer aba — sem isso, quem abria o menu
+  // pra alcançar um item escondido (ex: Despesas) via celular ficava com ele
+  // expandido em TODAS as abas seguintes, já que nada nunca recolhia de volta.
+  // No celular o menu fica empilhado ACIMA do conteúdo (não do lado, como no
+  // computador), então isso empurrava a tela inteira pra baixo com 8+ botões
+  // extras antes de mostrar qualquer coisa da aba escolhida.
+  fecharMenuSecundario();
   document.querySelectorAll('#conteudo > section').forEach(s => s.style.display = 'none');
   document.querySelectorAll('.nav-btn[data-aba]').forEach(b => b.classList.remove('ativo'));
   document.getElementById('sec-' + aba).style.display = 'block';
@@ -761,12 +768,21 @@ function trocarAba(aba){
 // controlado direto aqui, nos dois critérios ao mesmo tempo.
 function alternarMenuSecundario(){
   const sidebar = document.getElementById('sidebar');
-  const abrir = !sidebar.classList.contains('mostrar-secundarios');
-  sidebar.classList.toggle('mostrar-secundarios', abrir);
+  if(sidebar.classList.contains('mostrar-secundarios')){ fecharMenuSecundario(); return; }
+  sidebar.classList.add('mostrar-secundarios');
   const btnMaster = document.getElementById('nav-master');
-  if(btnMaster) btnMaster.style.display = (abrir && meuPerfil && meuPerfil.is_admin) ? 'block' : 'none';
+  if(btnMaster) btnMaster.style.display = (meuPerfil && meuPerfil.is_admin) ? 'block' : 'none';
   const btnToggle = document.getElementById('nav-toggle-secundarios');
-  if(btnToggle) btnToggle.textContent = abrir ? '✕ Menos' : '☰ Mais';
+  if(btnToggle) btnToggle.textContent = '✕ Menos';
+}
+
+function fecharMenuSecundario(){
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.remove('mostrar-secundarios');
+  const btnMaster = document.getElementById('nav-master');
+  if(btnMaster) btnMaster.style.display = 'none';
+  const btnToggle = document.getElementById('nav-toggle-secundarios');
+  if(btnToggle) btnToggle.textContent = '☰ Mais';
 }
 
 // =========================================================================
