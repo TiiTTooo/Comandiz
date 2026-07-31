@@ -37,11 +37,18 @@
   .relogio-data{font-size:12px;color:var(--cor-texto-suave);text-transform:capitalize;margin-top:2px;}
   .config-swatch{width:34px;height:34px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
   .config-swatch.selecionado{border-color:var(--cor-texto);}
-  .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;}
+  /* overflow-x:auto — sem isso, uma tabela larga (Pedidos, Fiados, Master...)
+     força o cartão inteiro a alargar além da tela no celular, cortando
+     colunas (Status, ação) pra fora da área visível. Com isso, só a tabela
+     ganha rolagem horizontal por dentro do cartão; o resto da página não mexe. */
+  .cartao{background:var(--cor-card);border:1px solid var(--cor-borda);border-radius:12px;padding:16px;margin-bottom:14px;overflow-x:auto;}
   .linha{display:flex;gap:10px;flex-wrap:wrap;}
   .linha > *{flex:1;min-width:140px;}
-  table{width:100%;border-collapse:collapse;font-size:14px;}
-  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--cor-borda);}
+  /* min-width — impede a tabela de espremer as colunas até ficar ilegível
+     num celular estreito; abaixo disso, o overflow-x:auto do .cartao (acima)
+     assume e a pessoa rola de lado em vez de ver tudo cortado. */
+  table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--cor-borda);white-space:nowrap;}
   th{color:var(--cor-texto-suave);font-weight:600;font-size:12px;text-transform:uppercase;}
   .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:600;}
   .badge-baixo{background:#ffe3e3;color:var(--cor-vermelho);}
