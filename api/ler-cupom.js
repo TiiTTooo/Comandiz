@@ -11,7 +11,13 @@
 // https://aistudio.google.com/apikey>. Depois de criar a variável, é
 // preciso um novo deploy pra ela valer (redeploy do último commit resolve).
 
-const MODELO = 'gemini-2.5-flash';
+// gemini-2.5-flash foi trocado pra este modelo depois que uma chave nova
+// (criada em ai.google.dev/apikey já em 2026) recebeu erro "no longer
+// available to new users" — modelos antigos do Gemini vão sendo fechados
+// pra chave nova mesmo continuando listados como GA na documentação, então
+// se isso voltar a acontecer no futuro, é sinal de que esse aqui também
+// saiu de linha e precisa trocar de novo pelo mais recente da família flash.
+const MODELO = 'gemini-3.6-flash';
 
 const SCHEMA_RESPOSTA = {
   type: 'OBJECT',
@@ -25,8 +31,10 @@ const SCHEMA_RESPOSTA = {
   required: ['fornecedor', 'valor']
 };
 
-const PROMPT = 'Você está lendo a foto de um cupom fiscal ou nota de compra brasileira, usada ' +
-  'para lançar uma despesa num sistema de gestão de um pequeno comércio de alimentação. Extraia ' +
+const PROMPT = 'Você está lendo a foto de um cupom fiscal ou nota de compra brasileira, de ' +
+  'qualquer tipo de estabelecimento (mercado, farmácia, posto, loja, restaurante, distribuidor, ' +
+  'etc.) — não é só de comércio de alimentação. É usada pra lançar uma despesa num sistema de ' +
+  'gestão. Extraia ' +
   'os dados no formato JSON definido pelo schema. Se algum campo não aparecer claramente no ' +
   'cupom, retorne null pra ele (exceto valor e fornecedor, que são obrigatórios — faça sua ' +
   'melhor leitura mesmo que a imagem não esteja perfeita). Não invente forma de pagamento sem ' +
