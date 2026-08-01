@@ -121,11 +121,28 @@
     .inicio-cabecalho{justify-content:flex-start;}
     .relogio-cartao{text-align:left;}
   }
+
+  /* Comanda de impressão: fica escondida na tela normal e só aparece quando
+     a pessoa manda imprimir (botão "Imprimir" no detalhe do pedido). O truque
+     de "visibility" em vez de "display" evita ter que remover o app inteiro
+     da tela pra imprimir só a comanda — funciona com qualquer impressora já
+     instalada como impressora do sistema operacional (térmica ou comum);
+     não é integração direta com a impressora (ESC/POS), então se a térmica
+     não tiver driver instalado no aparelho, o "Imprimir" do navegador não
+     vai listá-la como opção. */
+  #area-impressao{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #area-impressao, #area-impressao *{visibility:visible;}
+    #area-impressao{display:block;position:absolute;top:0;left:0;width:78mm;padding:4px;font-family:'Courier New',monospace;font-size:12px;color:#000;}
+    #area-impressao hr{border:none;border-top:1px dashed #000;margin:6px 0;}
+  }
 </style>
 </head>
 <body>
 
 <div id="toast-container"></div>
+<div id="area-impressao"></div>
 
 <!-- ============== TELA DE LOGIN / CADASTRO ============== -->
 <div id="tela-auth">
@@ -309,12 +326,8 @@
         <p style="color:var(--cor-texto-suave);font-size:13px;margin-top:-6px;">Lance aqui o total vendido no dia, por forma de pagamento — sem precisar criar cada pedido individual. Some automaticamente com os pedidos fechados pelo sistema no relatório abaixo.</p>
         <label>Data</label>
         <input type="date" id="ent-data" onchange="carregarEntradaDoDia()">
-        <div class="linha" style="margin-top:10px;">
-          <div><label>💵 Dinheiro (R$)</label><input type="number" step="0.01" min="0" id="ent-dinheiro" value="0"></div>
-          <div><label>⚡ Pix (R$)</label><input type="number" step="0.01" min="0" id="ent-pix" value="0"></div>
-          <div><label>🏧 Débito (R$)</label><input type="number" step="0.01" min="0" id="ent-debito" value="0"></div>
-          <div><label>💳 Crédito (R$)</label><input type="number" step="0.01" min="0" id="ent-credito" value="0"></div>
-        </div>
+        <div id="ent-tipos-lista" style="margin-top:10px;"></div>
+        <button type="button" class="btn-secundario btn-pequeno" onclick="adicionarTipoEntrada()">+ Novo tipo de entrada (ex: Maquininha 1)</button>
         <button class="btn" style="width:100%;margin-top:14px;" onclick="salvarEntradaManual(this)">Salvar entradas do dia</button>
       </div>
 
@@ -1173,11 +1186,31 @@ function iniciarRelogioInicio(){
 // =========================================================================
 // CARDÁPIO (cache usado no modal de novo pedido)
 // =========================================================================
+// Sabores/adicionais de cada produto, indexados por produto_id — carregados
+// junto com o cardápio pra montar as opções (rádio de sabor, checkbox de
+// adicional) na hora de montar um pedido sem precisar de uma ida ao banco
+// por produto clicado.
+let saboresCachePorProduto = {};
+let adicionaisCachePorProduto = {};
+
 async function carregarCardapioCache(){
   const { data, error } = await db.from('produtos')
     .select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
   if(error){ mostrarToast('Erro ao carregar cardápio: ' + error.message, 'erro'); return; }
   cardapioCache = data || [];
+
+  const idsComSabor = cardapioCache.filter(p => p.tem_sabor).map(p => p.id);
+  const idsComAdicionais = cardapioCache.filter(p => p.tem_adicionais).map(p => p.id);
+  saboresCachePorProduto = {};
+  adicionaisCachePorProduto = {};
+  if(idsComSabor.length){
+    const { data: sabores } = await db.from('produto_sabores').select('*').in('produto_id', idsComSabor).eq('ativo', true).order('ordem');
+    (sabores || []).forEach(s => { (saboresCachePorProduto[s.produto_id] = saboresCachePorProduto[s.produto_id] || []).push(s); });
+  }
+  if(idsComAdicionais.length){
+    const { data: adicionais } = await db.from('produto_adicionais').select('*').in('produto_id', idsComAdicionais).eq('ativo', true).order('ordem');
+    (adicionais || []).forEach(a => { (adicionaisCachePorProduto[a.produto_id] = adicionaisCachePorProduto[a.produto_id] || []).push(a); });
+  }
 }
 
 let _cacheTodosProdutos = [];
@@ -1200,8 +1233,59 @@ async function carregarProdutos(){
   cardapioCache = (data || []).filter(p => p.ativo);
 }
 
-function abrirModalProduto(id){
+// Guardam o estado "como veio do banco" pros sabores/adicionais do produto
+// sendo editado, pra comparar na hora de salvar e saber o que foi removido
+// (linha some da tela) vs alterado vs criado. Resetados toda vez que o
+// modal de produto abre.
+let _saboresOriginaisModal = [];
+let _adicionaisOriginaisModal = [];
+
+function linhaSaborHtml(id, nome){
+  return '<div class="linha-sabor" data-id="' + (id || '') + '" style="display:flex;gap:6px;margin-bottom:6px;">' +
+    '<input type="text" class="sabor-nome" placeholder="Nome do sabor (ex: Carne)" value="' + escHtml(nome || '') + '" style="flex:1;">' +
+    '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>' +
+  '</div>';
+}
+function linhaAdicionalHtml(id, nome, preco){
+  return '<div class="linha-adicional" data-id="' + (id || '') + '" style="display:flex;gap:6px;margin-bottom:6px;">' +
+    '<input type="text" class="adicional-nome" placeholder="Nome (ex: Borda recheada)" value="' + escHtml(nome || '') + '" style="flex:2;">' +
+    '<input type="number" step="0.01" min="0" class="adicional-preco" placeholder="Preço" value="' + (preco != null ? preco : '') + '" style="flex:1;">' +
+    '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>' +
+  '</div>';
+}
+function adicionarLinhaSabor(nome){
+  document.getElementById('prod-sabores-lista').insertAdjacentHTML('beforeend', linhaSaborHtml(null, nome));
+}
+function adicionarLinhaAdicional(nome, preco){
+  document.getElementById('prod-adicionais-lista').insertAdjacentHTML('beforeend', linhaAdicionalHtml(null, nome, preco));
+}
+function alternarSecaoSabores(){
+  document.getElementById('prod-sabores-secao').style.display = document.getElementById('prod-tem-sabor').checked ? 'block' : 'none';
+}
+function alternarSecaoAdicionais(){
+  document.getElementById('prod-adicionais-secao').style.display = document.getElementById('prod-tem-adicionais').checked ? 'block' : 'none';
+}
+
+async function abrirModalProduto(id){
   const produto = id ? cardapioCacheTodos().find(p => p.id === id) : null;
+
+  // Carrega sabores/adicionais já cadastrados ANTES de montar o modal —
+  // precisa vir do banco (não só do cache do produto) porque o cache do
+  // cardápio não guarda essas sublistas.
+  _saboresOriginaisModal = [];
+  _adicionaisOriginaisModal = [];
+  if(produto){
+    const [{ data: sabores }, { data: adicionais }] = await Promise.all([
+      db.from('produto_sabores').select('*').eq('produto_id', produto.id).eq('ativo', true).order('ordem'),
+      db.from('produto_adicionais').select('*').eq('produto_id', produto.id).eq('ativo', true).order('ordem')
+    ]);
+    _saboresOriginaisModal = sabores || [];
+    _adicionaisOriginaisModal = adicionais || [];
+  }
+
+  const temSabor = produto ? !!produto.tem_sabor : false;
+  const temAdicionais = produto ? !!produto.tem_adicionais : false;
+
   abrirModal(
     '<h2>' + (produto ? 'Editar produto' : 'Novo produto') + '</h2>' +
     '<form id="form-produto">' +
@@ -1209,25 +1293,93 @@ function abrirModalProduto(id){
       '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? escHtml(produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
       '<label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="prod-preco" required value="' + (produto ? produto.preco_venda : '') + '">' +
       '<label><input type="checkbox" id="prod-ativo" style="width:auto;" ' + (!produto || produto.ativo ? 'checked' : '') + '> Ativo (aparece no cardápio pra pedidos)</label>' +
+      '<label style="margin-top:14px;"><input type="checkbox" id="prod-tem-sabor" style="width:auto;" onchange="alternarSecaoSabores()" ' + (temSabor ? 'checked' : '') + '> Cliente escolhe 1 sabor (ex: pastéis)</label>' +
+      '<div id="prod-sabores-secao" style="display:' + (temSabor ? 'block' : 'none') + ';margin:6px 0 10px;">' +
+        '<div id="prod-sabores-lista">' + _saboresOriginaisModal.map(s => linhaSaborHtml(s.id, s.nome)).join('') + '</div>' +
+        '<button type="button" class="btn-secundario btn-pequeno" onclick="adicionarLinhaSabor()">+ Sabor</button>' +
+      '</div>' +
+      '<label><input type="checkbox" id="prod-tem-adicionais" style="width:auto;" onchange="alternarSecaoAdicionais()" ' + (temAdicionais ? 'checked' : '') + '> Tem itens adicionais (ex: borda recheada, bacon)</label>' +
+      '<div id="prod-adicionais-secao" style="display:' + (temAdicionais ? 'block' : 'none') + ';margin:6px 0 10px;">' +
+        '<div id="prod-adicionais-lista">' + _adicionaisOriginaisModal.map(a => linhaAdicionalHtml(a.id, a.nome, a.preco)).join('') + '</div>' +
+        '<button type="button" class="btn-secundario btn-pequeno" onclick="adicionarLinhaAdicional()">+ Adicional</button>' +
+      '</div>' +
       '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
     '</form>'
   );
   document.getElementById('form-produto').addEventListener('submit', async (e) => {
     e.preventDefault();
+    const temSaborForm = document.getElementById('prod-tem-sabor').checked;
+    const temAdicionaisForm = document.getElementById('prod-tem-adicionais').checked;
     const registro = {
       loja_id: meuPerfil.loja_id,
       nome: document.getElementById('prod-nome').value.trim(),
       categoria: document.getElementById('prod-categoria').value.trim(),
       preco_venda: Number(document.getElementById('prod-preco').value),
-      ativo: document.getElementById('prod-ativo').checked
+      ativo: document.getElementById('prod-ativo').checked,
+      tem_sabor: temSaborForm,
+      tem_adicionais: temAdicionaisForm
     };
     if(registro.preco_venda < 0){ mostrarToast('Preço não pode ser negativo.', 'erro'); return; }
+
+    // Lê as linhas de sabor/adicional direto do DOM (id vazio = linha nova).
+    const linhasSabor = Array.from(document.querySelectorAll('#prod-sabores-lista .linha-sabor')).map(el => ({
+      id: el.dataset.id ? Number(el.dataset.id) : null,
+      nome: el.querySelector('.sabor-nome').value.trim()
+    })).filter(s => s.nome);
+    const linhasAdicional = Array.from(document.querySelectorAll('#prod-adicionais-lista .linha-adicional')).map(el => ({
+      id: el.dataset.id ? Number(el.dataset.id) : null,
+      nome: el.querySelector('.adicional-nome').value.trim(),
+      preco: Number(el.querySelector('.adicional-preco').value) || 0
+    })).filter(a => a.nome);
+
+    if(temSaborForm && linhasSabor.length === 0){ mostrarToast('Cadastre ao menos 1 sabor, ou desmarque "Cliente escolhe 1 sabor".', 'erro'); return; }
+    if(linhasAdicional.some(a => a.preco < 0)){ mostrarToast('Preço do adicional não pode ser negativo.', 'erro'); return; }
+
     const btn = travarSubmit(e.target);
     if(!btn) return;
-    const { error } = produto
-      ? await db.from('produtos').update(registro).eq('id', produto.id)
-      : await db.from('produtos').insert(registro);
+
+    const { data: produtoSalvo, error } = produto
+      ? await db.from('produtos').update(registro).eq('id', produto.id).select().single()
+      : await db.from('produtos').insert(registro).select().single();
     if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar produto: ' + error.message, 'erro'); return; }
+
+    // Sabores: atualiza quem ficou, insere quem é novo, desativa (não apaga
+    // — pedidos antigos guardam o nome à parte) quem sumiu da lista.
+    const idsSaborMantidos = linhasSabor.filter(s => s.id).map(s => s.id);
+    const saboresRemovidos = _saboresOriginaisModal.filter(s => !idsSaborMantidos.includes(s.id));
+    const erros = [];
+    for(const s of linhasSabor){
+      if(s.id){
+        const { error: eUp } = await db.from('produto_sabores').update({ nome: s.nome }).eq('id', s.id);
+        if(eUp) erros.push(eUp.message);
+      } else {
+        const { error: eIn } = await db.from('produto_sabores').insert({ produto_id: produtoSalvo.id, nome: s.nome });
+        if(eIn) erros.push(eIn.message);
+      }
+    }
+    for(const s of saboresRemovidos){
+      const { error: eDel } = await db.from('produto_sabores').update({ ativo: false }).eq('id', s.id);
+      if(eDel) erros.push(eDel.message);
+    }
+
+    // Mesma lógica pros adicionais, incluindo o preço na atualização.
+    const idsAdicionalMantidos = linhasAdicional.filter(a => a.id).map(a => a.id);
+    const adicionaisRemovidos = _adicionaisOriginaisModal.filter(a => !idsAdicionalMantidos.includes(a.id));
+    for(const a of linhasAdicional){
+      if(a.id){
+        const { error: eUp } = await db.from('produto_adicionais').update({ nome: a.nome, preco: a.preco }).eq('id', a.id);
+        if(eUp) erros.push(eUp.message);
+      } else {
+        const { error: eIn } = await db.from('produto_adicionais').insert({ produto_id: produtoSalvo.id, nome: a.nome, preco: a.preco });
+        if(eIn) erros.push(eIn.message);
+      }
+    }
+    for(const a of adicionaisRemovidos){
+      const { error: eDel } = await db.from('produto_adicionais').update({ ativo: false }).eq('id', a.id);
+      if(eDel) erros.push(eDel.message);
+    }
+
+    if(erros.length){ destravarBotao(btn); mostrarToast('Produto salvo, mas houve erro nos sabores/adicionais: ' + erros[0], 'erro'); fecharModal(); carregarProdutos(); return; }
     mostrarToast('Produto salvo!', 'sucesso');
     fecharModal(); carregarProdutos();
   });
@@ -1273,6 +1425,7 @@ function rotuloCanal(c){
 
 function abrirModalNovoPedido(){
   itensNovoPedido = [];
+  _proximaChaveItemPedido = 1;
   abrirModal(
     '<h2>Novo pedido</h2>' +
     '<label>Canal</label>' +
@@ -1297,6 +1450,7 @@ function abrirModalNovoPedido(){
       '<input type="number" id="np-qtd" value="1" min="1" style="max-width:70px;">' +
       '<button type="button" class="btn-secundario" onclick="adicionarItemNovoPedido()">+ Add</button>' +
     '</div>' +
+    '<div id="np-opcoes" style="display:none;"></div>' +
     '<div id="np-itens" style="margin:14px 0;"></div>' +
     '<div style="text-align:right;font-weight:700;" id="np-total">Total: R$ 0,00</div>' +
     '<button class="btn" style="width:100%;margin-top:12px;" onclick="salvarNovoPedido(this)">Criar pedido</button>'
@@ -1367,7 +1521,43 @@ function selecionarProdutoNovoPedido(produtoId){
   document.getElementById('np-produto').value = produto.id;
   document.getElementById('np-produto-busca').value = produto.nome + ' — ' + formatarReais(produto.preco_venda);
   document.getElementById('np-produto-lista').style.display = 'none';
+  renderizarOpcoesProdutoNovoPedido(produto);
 }
+
+// Sabor (rádio, só 1) e adicionais (checkbox, 0+) do produto selecionado —
+// mostrados entre a busca e o "+ Add" pra escolher antes de jogar no carrinho.
+function renderizarOpcoesProdutoNovoPedido(produto){
+  const wrap = document.getElementById('np-opcoes');
+  if(!produto || (!produto.tem_sabor && !produto.tem_adicionais)){ wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  let html = '';
+  if(produto.tem_sabor){
+    const sabores = saboresCachePorProduto[produto.id] || [];
+    html += '<div style="margin-top:8px;"><strong>Sabor</strong><br>' +
+      (sabores.length ? sabores.map((s,i) => (
+        '<label style="display:inline-flex;align-items:center;gap:4px;margin:4px 10px 0 0;">' +
+          '<input type="radio" name="np-sabor" value="' + s.id + '" style="width:auto;" ' + (i === 0 ? 'checked' : '') + '> ' + escHtml(s.nome) +
+        '</label>'
+      )).join('') : '<span style="color:var(--cor-vermelho);">Nenhum sabor cadastrado pra esse produto — cadastre em Cardápio.</span>') +
+    '</div>';
+  }
+  if(produto.tem_adicionais){
+    const adicionais = adicionaisCachePorProduto[produto.id] || [];
+    html += '<div style="margin-top:8px;"><strong>+ Itens adicionais</strong><br>' +
+      (adicionais.length ? adicionais.map(a => (
+        '<label style="display:inline-flex;align-items:center;gap:4px;margin:4px 10px 0 0;">' +
+          '<input type="checkbox" class="np-adicional-chk" value="' + a.id + '" style="width:auto;"> ' + escHtml(a.nome) + ' (+' + formatarReais(a.preco) + ')' +
+        '</label>'
+      )).join('') : '<span style="color:var(--cor-texto-suave);">Nenhum adicional cadastrado.</span>') +
+    '</div>';
+  }
+  wrap.innerHTML = html;
+  wrap.style.display = 'block';
+}
+
+// Chave única por linha do carrinho — precisa ser diferente de produto_id
+// porque agora o mesmo produto pode aparecer em mais de uma linha (sabores
+// ou combinações de adicionais diferentes não podem ser somados juntos).
+let _proximaChaveItemPedido = 1;
 
 function adicionarItemNovoPedido(){
   const produtoId = Number(document.getElementById('np-produto').value);
@@ -1375,39 +1565,79 @@ function adicionarItemNovoPedido(){
   const produto = cardapioCache.find(p => p.id === produtoId);
   if(!produto){ mostrarToast('Busque e selecione um produto da lista antes de adicionar.', 'erro'); return; }
   if(qtd <= 0){ mostrarToast('Quantidade precisa ser maior que zero.', 'erro'); return; }
-  const existente = itensNovoPedido.find(i => i.produto_id === produtoId);
-  if(existente) existente.quantidade += qtd;
-  else itensNovoPedido.push({ produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd });
+
+  let saborId = null, saborNome = null;
+  if(produto.tem_sabor){
+    const radioMarcado = document.querySelector('input[name="np-sabor"]:checked');
+    if(!radioMarcado){ mostrarToast('Escolha um sabor pra esse item.', 'erro'); return; }
+    saborId = Number(radioMarcado.value);
+    const saborObj = (saboresCachePorProduto[produto.id] || []).find(s => s.id === saborId);
+    saborNome = saborObj ? saborObj.nome : null;
+  }
+
+  let adicionaisEscolhidos = [];
+  if(produto.tem_adicionais){
+    adicionaisEscolhidos = Array.from(document.querySelectorAll('.np-adicional-chk:checked')).map(chk => {
+      const id = Number(chk.value);
+      const obj = (adicionaisCachePorProduto[produto.id] || []).find(a => a.id === id);
+      return obj ? { id: obj.id, nome: obj.nome, preco: obj.preco } : null;
+    }).filter(Boolean);
+  }
+
+  // Item simples (sem sabor nem adicional) continua juntando quantidade
+  // numa linha só, como antes. Com sabor/adicional, cada adição vira uma
+  // linha nova — juntar exigiria comparar a combinação de adicionais
+  // escolhida, o que não compensa pro ganho de tela.
+  const podeJuntar = !produto.tem_sabor && !produto.tem_adicionais;
+  const existente = podeJuntar ? itensNovoPedido.find(i => i.produto_id === produtoId && !i.sabor_id && (!i.adicionais || i.adicionais.length === 0)) : null;
+  if(existente){
+    existente.quantidade += qtd;
+  } else {
+    itensNovoPedido.push({
+      chave: _proximaChaveItemPedido++,
+      produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd,
+      sabor_id: saborId, sabor_nome: saborNome,
+      adicionais: adicionaisEscolhidos
+    });
+  }
   renderizarItensNovoPedido();
   document.getElementById('np-produto').value = '';
   document.getElementById('np-produto-busca').value = '';
   document.getElementById('np-qtd').value = 1;
+  renderizarOpcoesProdutoNovoPedido(null);
 }
 
-function removerItemNovoPedido(produtoId){
-  itensNovoPedido = itensNovoPedido.filter(i => i.produto_id !== produtoId);
+function removerItemNovoPedido(chave){
+  itensNovoPedido = itensNovoPedido.filter(i => i.chave !== chave);
   renderizarItensNovoPedido();
 }
 
-function editarQuantidadeItemNovoPedido(produtoId, novaQtd){
+function editarQuantidadeItemNovoPedido(chave, novaQtd){
   const qtd = Number(novaQtd);
-  const item = itensNovoPedido.find(i => i.produto_id === produtoId);
+  const item = itensNovoPedido.find(i => i.chave === chave);
   if(!item) return;
-  if(!qtd || qtd <= 0){ removerItemNovoPedido(produtoId); return; }
+  if(!qtd || qtd <= 0){ removerItemNovoPedido(chave); return; }
   item.quantidade = qtd;
   renderizarItensNovoPedido();
 }
 
 function renderizarItensNovoPedido(){
-  const total = itensNovoPedido.reduce((s,i) => s + i.preco * i.quantidade, 0);
-  document.getElementById('np-itens').innerHTML = itensNovoPedido.map(i => (
-    '<div class="item-linha">' +
-      '<input type="number" min="1" value="' + i.quantidade + '" style="max-width:60px;" ' +
-        'onchange="editarQuantidadeItemNovoPedido(' + i.produto_id + ', this.value)">' +
-      '<span>' + escHtml(i.nome) + '</span><span>' + formatarReais(i.preco * i.quantidade) + '</span>' +
-      '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.produto_id + ')">remover</button>' +
-    '</div>'
-  )).join('');
+  const precoComExtras = i => i.preco + (i.adicionais || []).reduce((s,a) => s + a.preco, 0);
+  const total = itensNovoPedido.reduce((s,i) => s + precoComExtras(i) * i.quantidade, 0);
+  document.getElementById('np-itens').innerHTML = itensNovoPedido.map(i => {
+    const detalhes = [];
+    if(i.sabor_nome) detalhes.push('Sabor: ' + escHtml(i.sabor_nome));
+    if(i.adicionais && i.adicionais.length) detalhes.push('+ ' + i.adicionais.map(a => escHtml(a.nome)).join(', '));
+    return (
+      '<div class="item-linha" style="flex-wrap:wrap;">' +
+        '<input type="number" min="1" value="' + i.quantidade + '" style="max-width:60px;" ' +
+          'onchange="editarQuantidadeItemNovoPedido(' + i.chave + ', this.value)">' +
+        '<span>' + escHtml(i.nome) + (detalhes.length ? ' <small style="color:var(--cor-texto-suave);">(' + detalhes.join(' · ') + ')</small>' : '') + '</span>' +
+        '<span>' + formatarReais(precoComExtras(i) * i.quantidade) + '</span>' +
+        '<button type="button" class="btn-secundario btn-pequeno" onclick="removerItemNovoPedido(' + i.chave + ')">remover</button>' +
+      '</div>'
+    );
+  }).join('');
   document.getElementById('np-total').textContent = 'Total: ' + formatarReais(total);
 }
 
@@ -1425,21 +1655,37 @@ async function salvarNovoPedido(botao){
   // Isso fecha dois problemas: pedido "fantasma" sem item se a gravação
   // caísse no meio, e a possibilidade de alguém manipular a chamada pra
   // gravar um preço menor que o real.
-  const itensParaEnviar = itensNovoPedido.map(i => ({ produto_id: i.produto_id, quantidade: i.quantidade }));
+  const itensParaEnviar = itensNovoPedido.map(i => ({
+    produto_id: i.produto_id,
+    quantidade: i.quantidade,
+    sabor_id: i.sabor_id || null,
+    adicional_ids: (i.adicionais || []).map(a => a.id)
+  }));
   const { data: pedido, error } = await db.rpc('criar_pedido_completo', {
     p_canal: canal, p_mesa: mesa, p_itens: itensParaEnviar
   });
   if(error){ destravarBotao(btn); mostrarToast('Erro ao criar pedido: ' + error.message, 'erro'); return; }
 
   mostrarToast('Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' criado!', 'sucesso');
+  // Imprime a comanda assim que o pedido é criado (pra entregar pro
+  // cozinheiro ou grudar no pedido de entrega) — monta a partir do carrinho
+  // que já está na tela, sem precisar buscar os itens de novo no banco.
+  const itensImpressao = itensNovoPedido.map(i => ({
+    quantidade: i.quantidade,
+    produtos: { nome: i.nome },
+    preco_unit_no_momento: i.preco,
+    sabor_nome_no_momento: i.sabor_nome || null,
+    itens_pedido_adicionais: (i.adicionais || []).map(a => ({ nome_no_momento: a.nome, preco_no_momento: a.preco }))
+  }));
   fecharModal(); carregarPedidos();
+  imprimirPedido(pedido, itensImpressao);
 }
 
 async function abrirDetalhePedido(id){
   const { data: pedido, error } = await db.from('pedidos').select('*').eq('id', id).single();
   if(error){ mostrarToast('Erro ao abrir pedido: ' + error.message, 'erro'); return; }
   const { data: itens, error: e2 } = await db.from('itens_pedido')
-    .select('*, produtos(nome)').eq('pedido_id', id);
+    .select('*, produtos(nome), itens_pedido_adicionais(nome_no_momento, preco_no_momento)').eq('pedido_id', id);
   if(e2){ mostrarToast('Erro ao carregar itens: ' + e2.message, 'erro'); return; }
 
   const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
@@ -1447,8 +1693,15 @@ async function abrirDetalhePedido(id){
     '<h2>Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' — ' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' (Mesa ' + escHtml(pedido.mesa) + ')' : '') + '</h2>' +
     '<p style="color:var(--cor-texto-suave);font-size:13px;margin-top:-8px;">' + formatarDataHoraPedido(pedido.criado_em) + '</p>' +
     '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
-    '<ul>' + itens.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + ' — ' + formatarReais(i.preco_unit_no_momento * i.quantidade) + '</li>').join('') + '</ul>' +
+    '<ul>' + itens.map(i => {
+      const extras = [];
+      if(i.sabor_nome_no_momento) extras.push('Sabor: ' + escHtml(i.sabor_nome_no_momento));
+      if(i.itens_pedido_adicionais && i.itens_pedido_adicionais.length) extras.push('+ ' + i.itens_pedido_adicionais.map(a => escHtml(a.nome_no_momento)).join(', '));
+      const precoComExtras = Number(i.preco_unit_no_momento) + (i.itens_pedido_adicionais || []).reduce((s,a) => s + Number(a.preco_no_momento), 0);
+      return '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + (extras.length ? ' <small style="color:var(--cor-texto-suave);">(' + extras.join(' · ') + ')</small>' : '') + ' — ' + formatarReais(precoComExtras * i.quantidade) + '</li>';
+    }).join('') + '</ul>' +
     '<div style="font-weight:700;">Total: ' + formatarReais(pedido.total) + '</div>' +
+    '<button type="button" id="dp-btn-imprimir" class="btn-secundario" style="width:100%;margin-top:10px;">🖨️ Imprimir comanda</button>' +
     (finalizavel ? (
       '<label style="margin-top:16px;">Forma de pagamento (pra fechar)</label>' +
       '<input type="hidden" id="dp-pagamento" value="">' +
@@ -1471,10 +1724,40 @@ async function abrirDetalhePedido(id){
       '<button class="btn-secundario" style="width:100%;margin-top:8px;" onclick="cancelarPedido(this,' + pedido.id + ',' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ')">Cancelar pedido</button>'
     ) : '')
   );
+  document.getElementById('dp-btn-imprimir').addEventListener('click', () => imprimirPedido(pedido, itens));
   if(finalizavel){
     const primeiroBotao = document.querySelector('#dp-pagamento-botoes .forma-btn');
     if(primeiroBotao) selecionarFormaPagamento(primeiroBotao, 'dinheiro');
   }
+}
+
+// Monta a comanda (formato estreito, ~80mm) dentro de #area-impressao — que
+// fica escondida na tela normal e só some visível pro navegador na hora de
+// imprimir (ver @media print no <style>) — e chama o print do navegador.
+// Depende da impressora (térmica ou comum) já estar instalada como
+// impressora do sistema operacional; isso aqui não fala ESC/POS direto com
+// o hardware.
+function imprimirPedido(pedido, itens){
+  const nomeLoja = (document.getElementById('sidebar-loja-nome') || {}).textContent || 'Comandiz';
+  const linhas = itens.map(i => {
+    const extras = [];
+    if(i.sabor_nome_no_momento) extras.push('Sabor: ' + i.sabor_nome_no_momento);
+    (i.itens_pedido_adicionais || []).forEach(a => extras.push('+ ' + a.nome_no_momento));
+    const precoComExtras = Number(i.preco_unit_no_momento) + (i.itens_pedido_adicionais || []).reduce((s,a) => s + Number(a.preco_no_momento), 0);
+    return '<div style="margin-bottom:4px;">' +
+      '<div>' + i.quantidade + 'x ' + escHtml(i.produtos ? i.produtos.nome : '?') + '</div>' +
+      extras.map(e => '<div style="padding-left:10px;font-size:11px;">' + escHtml(e) + '</div>').join('') +
+      '<div style="text-align:right;">' + formatarReais(precoComExtras * i.quantidade) + '</div>' +
+    '</div>';
+  }).join('');
+  document.getElementById('area-impressao').innerHTML =
+    '<div style="text-align:center;font-weight:bold;">' + escHtml(nomeLoja) + '</div>' +
+    '<div style="text-align:center;">Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + '</div>' +
+    '<div style="text-align:center;font-size:11px;">' + formatarDataHoraPedido(pedido.criado_em) + '</div>' +
+    '<div style="text-align:center;font-size:11px;">' + rotuloCanal(pedido.canal) + (pedido.mesa ? ' — Mesa ' + escHtml(pedido.mesa) : '') + '</div>' +
+    '<hr>' + linhas + '<hr>' +
+    '<div style="text-align:right;font-weight:bold;">Total: ' + formatarReais(pedido.total) + '</div>';
+  window.print();
 }
 
 function selecionarFormaPagamento(botaoClicado, valor){
@@ -1530,6 +1813,32 @@ async function cancelarPedido(botao, id, numeroDia){
 // ENTRADAS (lançamento manual — alternativa a criar pedido por pedido)
 // =========================================================================
 const ROTULOS_FORMA_PAGAMENTO = { dinheiro: '💵 Dinheiro', pix: '⚡ Pix', debito: '🏧 Débito', credito: '💳 Crédito' };
+// Dinheiro/Pix/Débito/Crédito continuam fixos porque "casam" automaticamente
+// com a forma de pagamento de pedidos fechados pelo sistema e do fiado (essas
+// duas tabelas continuam só aceitando essas 4 formas). Além desses, a loja
+// pode cadastrar tipos extras de texto livre (ex: "Maquininha 1", "Maquininha
+// 2") — eles só entram na coluna "Lançado manual" do relatório, já que não
+// existe like automático deles com pedido/fiado.
+const TIPOS_FIXOS_ENTRADA = [
+  { chave: 'dinheiro', rotulo: '💵 Dinheiro' },
+  { chave: 'pix', rotulo: '⚡ Pix' },
+  { chave: 'debito', rotulo: '🏧 Débito' },
+  { chave: 'credito', rotulo: '💳 Crédito' }
+];
+
+function linhaEntradaHtml(chaveFixa, nome, valor){
+  const fixo = !!chaveFixa;
+  return '<div class="linha entrada-linha" data-chave-fixa="' + (chaveFixa || '') + '" style="align-items:flex-end;margin-bottom:8px;">' +
+    (fixo
+      ? '<div style="flex:1;"><label>' + nome + '</label><input type="text" class="entrada-tipo-nome" value="' + escHtml(nome) + '" disabled></div>'
+      : '<div style="flex:1;"><label>Tipo</label><input type="text" class="entrada-tipo-nome" placeholder="Ex: Maquininha 1" value="' + escHtml(nome || '') + '"></div>') +
+    '<div style="width:120px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="entrada-tipo-valor" value="' + (valor || 0) + '"></div>' +
+    (fixo ? '' : '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>') +
+  '</div>';
+}
+function adicionarTipoEntrada(nome, valor){
+  document.getElementById('ent-tipos-lista').insertAdjacentHTML('beforeend', linhaEntradaHtml(null, nome, valor));
+}
 
 async function carregarEntradas(){
   document.getElementById('ent-data').value = dataLocalISO(new Date());
@@ -1546,30 +1855,34 @@ async function carregarEntradaDoDia(){
   if(error){ mostrarToast('Erro ao carregar entradas do dia: ' + error.message, 'erro'); return; }
   const porForma = {};
   (linhas || []).forEach(l => { porForma[l.forma_pagamento] = Number(l.valor); });
-  document.getElementById('ent-dinheiro').value = porForma.dinheiro || 0;
-  document.getElementById('ent-pix').value = porForma.pix || 0;
-  document.getElementById('ent-debito').value = porForma.debito || 0;
-  document.getElementById('ent-credito').value = porForma.credito || 0;
+  const chavesFixas = TIPOS_FIXOS_ENTRADA.map(t => t.chave);
+  const lista = document.getElementById('ent-tipos-lista');
+  lista.innerHTML = TIPOS_FIXOS_ENTRADA.map(t => linhaEntradaHtml(t.chave, t.rotulo, porForma[t.chave] || 0)).join('') +
+    Object.keys(porForma).filter(f => !chavesFixas.includes(f)).map(f => linhaEntradaHtml(null, f, porForma[f])).join('');
 }
 
 async function salvarEntradaManual(botao){
   const data = document.getElementById('ent-data').value;
   if(!data){ mostrarToast('Escolha a data.', 'erro'); return; }
-  const valores = {
-    dinheiro: Number(document.getElementById('ent-dinheiro').value) || 0,
-    pix: Number(document.getElementById('ent-pix').value) || 0,
-    debito: Number(document.getElementById('ent-debito').value) || 0,
-    credito: Number(document.getElementById('ent-credito').value) || 0
-  };
-  if(Object.values(valores).some(v => v < 0)){ mostrarToast('Valores não podem ser negativos.', 'erro'); return; }
+
+  const linhasForm = Array.from(document.querySelectorAll('#ent-tipos-lista .entrada-linha')).map(el => ({
+    chaveFixa: el.dataset.chaveFixa || null,
+    nome: el.querySelector('.entrada-tipo-nome').value.trim(),
+    valor: Number(el.querySelector('.entrada-tipo-valor').value) || 0
+  }));
+  if(linhasForm.some(l => l.valor < 0)){ mostrarToast('Valores não podem ser negativos.', 'erro'); return; }
+  const custosSemNome = linhasForm.filter(l => !l.chaveFixa && l.valor > 0 && !l.nome);
+  if(custosSemNome.length){ mostrarToast('Digite o nome do tipo de entrada antes de salvar.', 'erro'); return; }
 
   const btn = travarBotao(botao);
   if(!btn) return;
 
-  const linhas = Object.keys(valores).map(forma => ({
-    loja_id: meuPerfil.loja_id, data, forma_pagamento: forma, valor: valores[forma],
-    atualizado_por: usuarioAtual.id, atualizado_em: new Date().toISOString()
-  }));
+  const linhas = linhasForm
+    .filter(l => l.chaveFixa || l.nome) // ignora linha custom vazia (nome em branco, valor 0)
+    .map(l => ({
+      loja_id: meuPerfil.loja_id, data, forma_pagamento: l.chaveFixa || l.nome, valor: l.valor,
+      atualizado_por: usuarioAtual.id, atualizado_em: new Date().toISOString()
+    }));
   const { error } = await db.from('entradas_manuais')
     .upsert(linhas, { onConflict: 'loja_id,data,forma_pagamento' });
   // Diferente dos formulários em modal, essa tela não fecha sozinha depois de
@@ -1639,14 +1952,20 @@ async function carregarRelatorioEntradas(){
   });
   (fiados || []).forEach(f => { porFormaFiado[f.forma_pagamento] = (porFormaFiado[f.forma_pagamento] || 0) + Number(f.valor); });
 
-  const formas = ['dinheiro','pix','debito','credito'];
+  // Além das 4 formas fixas (que também recebem pedidos/fiado), inclui
+  // qualquer tipo de entrada extra que a loja tenha lançado manualmente
+  // nesse período (ex: "Maquininha 1") — senão esses valores ficavam
+  // lançados no banco mas nunca apareciam em relatório nenhum.
+  const formasFixas = ['dinheiro','pix','debito','credito'];
+  const formasCustom = Object.keys(porFormaManual).filter(f => !formasFixas.includes(f)).sort();
+  const formas = formasFixas.concat(formasCustom);
   let totalManual = 0, totalPedidos = 0, totalFiado = 0;
   document.getElementById('entradas-tabela').innerHTML = formas.map(forma => {
     const manual = porFormaManual[forma] || 0;
     const doSistema = porFormaPedidos[forma] || 0;
     const fiado = porFormaFiado[forma] || 0;
     totalManual += manual; totalPedidos += doSistema; totalFiado += fiado;
-    return '<tr><td>' + ROTULOS_FORMA_PAGAMENTO[forma] + '</td><td>' + formatarReais(manual) + '</td><td>' + formatarReais(doSistema) + '</td><td>' + formatarReais(fiado) + '</td><td style="font-weight:700;">' + formatarReais(manual + doSistema + fiado) + '</td></tr>';
+    return '<tr><td>' + (ROTULOS_FORMA_PAGAMENTO[forma] || escHtml(forma)) + '</td><td>' + formatarReais(manual) + '</td><td>' + formatarReais(doSistema) + '</td><td>' + formatarReais(fiado) + '</td><td style="font-weight:700;">' + formatarReais(manual + doSistema + fiado) + '</td></tr>';
   }).join('');
 
   document.getElementById('entradas-stats').innerHTML =
@@ -1661,7 +1980,7 @@ async function carregarRelatorioEntradas(){
 // =========================================================================
 async function carregarCozinha(){
   const { data, error } = await db.from('pedidos')
-    .select('*, itens_pedido(quantidade, produtos(nome))')
+    .select('*, itens_pedido(quantidade, produtos(nome), sabor_nome_no_momento, itens_pedido_adicionais(nome_no_momento))')
     .eq('loja_id', meuPerfil.loja_id)
     .in('status', ['aberto','pronto'])
     .order('criado_em', { ascending: true });
@@ -1671,7 +1990,12 @@ async function carregarCozinha(){
     '<div class="cozinha-card ' + (p.status === 'pronto' ? 'pronto' : '') + '">' +
       '<strong>#' + (p.numero_dia != null ? p.numero_dia : p.id) + ' — ' + rotuloCanal(p.canal) + (p.mesa ? ' (Mesa ' + escHtml(p.mesa) + ')' : '') + '</strong>' +
       '<div style="font-size:11px;color:var(--cor-texto-suave);margin:-2px 0 6px;">' + formatarDataPedido(p.criado_em) + '</div>' +
-      '<ul>' + p.itens_pedido.map(i => '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + '</li>').join('') + '</ul>' +
+      '<ul>' + p.itens_pedido.map(i => {
+        const extras = [];
+        if(i.sabor_nome_no_momento) extras.push(escHtml(i.sabor_nome_no_momento));
+        if(i.itens_pedido_adicionais && i.itens_pedido_adicionais.length) extras.push('+ ' + i.itens_pedido_adicionais.map(a => escHtml(a.nome_no_momento)).join(', '));
+        return '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + (extras.length ? ' <small>(' + extras.join(' · ') + ')</small>' : '') + '</li>';
+      }).join('') + '</ul>' +
       (p.status === 'aberto'
         ? '<button class="btn" style="width:100%;" onclick="marcarPedidoPronto(' + p.id + ')">Marcar como pronto</button>'
         : '<span class="badge badge-pronto">Pronto</span>' +
