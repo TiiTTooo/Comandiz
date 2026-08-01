@@ -376,7 +376,10 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn" onclick="abrirModalDespesa()">+ Nova despesa</button>
         <button class="btn-secundario" id="btn-ler-cupom" onclick="document.getElementById('cupom-input').click()">📷 Ler cupom</button>
-        <input type="file" id="cupom-input" accept="image/*" capture="environment" style="display:none;" onchange="lerCupom(this.files[0])">
+        <!-- sem o atributo capture: o navegador mostra a opção de tirar foto NA HORA
+             ou escolher uma foto já existente da galeria (antes, capture="environment"
+             pulava direto pra câmera e não deixava escolher da galeria). -->
+        <input type="file" id="cupom-input" accept="image/*" style="display:none;" onchange="lerCupom(this.files[0])">
       </div>
       <div class="cartao" style="margin-top:16px;">
         <table>
