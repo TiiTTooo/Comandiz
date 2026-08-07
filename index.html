@@ -895,6 +895,15 @@ function abrirModal(htmlConteudo){
   document.getElementById('modal-fundo').classList.add('aberto');
 }
 
+// ESC fecha o modal aberto (cadastro, novo pedido, detalhe do pedido etc.) —
+// mesmo comportamento que clicar no × ou fora da caixa. Não interfere em nada
+// enquanto a pessoa está digitando (Escape não modifica o texto do campo).
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && document.getElementById('modal-fundo').classList.contains('aberto')){
+    fecharModal();
+  }
+});
+
 // =========================================================================
 // INÍCIO / DASHBOARD
 // =========================================================================
@@ -1293,8 +1302,9 @@ async function abrirModalProduto(id){
       '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? escHtml(produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
       '<label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="prod-preco" required value="' + (produto ? produto.preco_venda : '') + '">' +
       '<label><input type="checkbox" id="prod-ativo" style="width:auto;" ' + (!produto || produto.ativo ? 'checked' : '') + '> Ativo (aparece no cardápio pra pedidos)</label>' +
-      '<label style="margin-top:14px;"><input type="checkbox" id="prod-tem-sabor" style="width:auto;" onchange="alternarSecaoSabores()" ' + (temSabor ? 'checked' : '') + '> Cliente escolhe 1 sabor (ex: pastéis)</label>' +
+      '<label style="margin-top:14px;"><input type="checkbox" id="prod-tem-sabor" style="width:auto;" onchange="alternarSecaoSabores()" ' + (temSabor ? 'checked' : '') + '> Cliente escolhe sabor (ex: pastéis)</label>' +
       '<div id="prod-sabores-secao" style="display:' + (temSabor ? 'block' : 'none') + ';margin:6px 0 10px;">' +
+        '<label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-bottom:8px;"><input type="checkbox" id="prod-varios-sabores" style="width:auto;" ' + (produto && produto.permite_varios_sabores ? 'checked' : '') + '> Permite escolher mais de 1 sabor por unidade (ex: pastel meio a meio)</label>' +
         '<div id="prod-sabores-lista">' + _saboresOriginaisModal.map(s => linhaSaborHtml(s.id, s.nome)).join('') + '</div>' +
         '<button type="button" class="btn-secundario btn-pequeno" onclick="adicionarLinhaSabor()">+ Sabor</button>' +
       '</div>' +
@@ -1317,7 +1327,8 @@ async function abrirModalProduto(id){
       preco_venda: Number(document.getElementById('prod-preco').value),
       ativo: document.getElementById('prod-ativo').checked,
       tem_sabor: temSaborForm,
-      tem_adicionais: temAdicionaisForm
+      tem_adicionais: temAdicionaisForm,
+      permite_varios_sabores: temSaborForm && document.getElementById('prod-varios-sabores').checked
     };
     if(registro.preco_venda < 0){ mostrarToast('Preço não pode ser negativo.', 'erro'); return; }
 
@@ -1379,9 +1390,13 @@ async function abrirModalProduto(id){
       if(eDel) erros.push(eDel.message);
     }
 
-    if(erros.length){ destravarBotao(btn); mostrarToast('Produto salvo, mas houve erro nos sabores/adicionais: ' + erros[0], 'erro'); fecharModal(); carregarProdutos(); return; }
+    if(erros.length){ destravarBotao(btn); mostrarToast('Produto salvo, mas houve erro nos sabores/adicionais: ' + erros[0], 'erro'); fecharModal(); await carregarCardapioCache(); carregarProdutos(); return; }
     mostrarToast('Produto salvo!', 'sucesso');
-    fecharModal(); carregarProdutos();
+    // Recarrega saboresCachePorProduto/adicionaisCachePorProduto (usados na tela de
+    // Novo Pedido) além da lista da aba Cardápio — sem isso, sabor/adicional recém
+    // cadastrado só aparecia pra escolher num pedido depois de sair e entrar de novo
+    // (o cache ficava parado no que existia no login).
+    fecharModal(); await carregarCardapioCache(); carregarProdutos();
   });
 }
 
@@ -1532,10 +1547,15 @@ function renderizarOpcoesProdutoNovoPedido(produto){
   let html = '';
   if(produto.tem_sabor){
     const sabores = saboresCachePorProduto[produto.id] || [];
-    html += '<div style="margin-top:8px;"><strong>Sabor</strong><br>' +
+    // Produto normal: rádio (só 1 sabor). Produto com permite_varios_sabores
+    // marcado no Cardápio (ex: pastel meio a meio): checkbox (1 ou mais).
+    const inputType = produto.permite_varios_sabores ? 'checkbox' : 'radio';
+    const inputName = produto.permite_varios_sabores ? '' : 'name="np-sabor" ';
+    const inputClass = produto.permite_varios_sabores ? 'class="np-sabor-chk" ' : '';
+    html += '<div style="margin-top:8px;"><strong>Sabor' + (produto.permite_varios_sabores ? ' (pode escolher mais de 1)' : '') + '</strong><br>' +
       (sabores.length ? sabores.map((s,i) => (
         '<label style="display:inline-flex;align-items:center;gap:4px;margin:4px 10px 0 0;">' +
-          '<input type="radio" name="np-sabor" value="' + s.id + '" style="width:auto;" ' + (i === 0 ? 'checked' : '') + '> ' + escHtml(s.nome) +
+          '<input type="' + inputType + '" ' + inputName + inputClass + 'value="' + s.id + '" style="width:auto;" ' + (!produto.permite_varios_sabores && i === 0 ? 'checked' : '') + '> ' + escHtml(s.nome) +
         '</label>'
       )).join('') : '<span style="color:var(--cor-vermelho);">Nenhum sabor cadastrado pra esse produto — cadastre em Cardápio.</span>') +
     '</div>';
@@ -1566,13 +1586,17 @@ function adicionarItemNovoPedido(){
   if(!produto){ mostrarToast('Busque e selecione um produto da lista antes de adicionar.', 'erro'); return; }
   if(qtd <= 0){ mostrarToast('Quantidade precisa ser maior que zero.', 'erro'); return; }
 
-  let saborId = null, saborNome = null;
+  let saborIds = [], saborNomes = [];
   if(produto.tem_sabor){
-    const radioMarcado = document.querySelector('input[name="np-sabor"]:checked');
-    if(!radioMarcado){ mostrarToast('Escolha um sabor pra esse item.', 'erro'); return; }
-    saborId = Number(radioMarcado.value);
-    const saborObj = (saboresCachePorProduto[produto.id] || []).find(s => s.id === saborId);
-    saborNome = saborObj ? saborObj.nome : null;
+    const marcados = produto.permite_varios_sabores
+      ? Array.from(document.querySelectorAll('.np-sabor-chk:checked'))
+      : Array.from(document.querySelectorAll('input[name="np-sabor"]:checked'));
+    if(!marcados.length){ mostrarToast('Escolha ' + (produto.permite_varios_sabores ? 'ao menos 1 sabor' : 'um sabor') + ' pra esse item.', 'erro'); return; }
+    saborIds = marcados.map(el => Number(el.value));
+    saborNomes = saborIds.map(id => {
+      const obj = (saboresCachePorProduto[produto.id] || []).find(s => s.id === id);
+      return obj ? obj.nome : '?';
+    });
   }
 
   let adicionaisEscolhidos = [];
@@ -1589,14 +1613,14 @@ function adicionarItemNovoPedido(){
   // linha nova — juntar exigiria comparar a combinação de adicionais
   // escolhida, o que não compensa pro ganho de tela.
   const podeJuntar = !produto.tem_sabor && !produto.tem_adicionais;
-  const existente = podeJuntar ? itensNovoPedido.find(i => i.produto_id === produtoId && !i.sabor_id && (!i.adicionais || i.adicionais.length === 0)) : null;
+  const existente = podeJuntar ? itensNovoPedido.find(i => i.produto_id === produtoId && (!i.sabor_ids || i.sabor_ids.length === 0) && (!i.adicionais || i.adicionais.length === 0)) : null;
   if(existente){
     existente.quantidade += qtd;
   } else {
     itensNovoPedido.push({
       chave: _proximaChaveItemPedido++,
       produto_id: produtoId, nome: produto.nome, preco: produto.preco_venda, quantidade: qtd,
-      sabor_id: saborId, sabor_nome: saborNome,
+      sabor_ids: saborIds, sabor_nomes: saborNomes,
       adicionais: adicionaisEscolhidos
     });
   }
@@ -1626,7 +1650,7 @@ function renderizarItensNovoPedido(){
   const total = itensNovoPedido.reduce((s,i) => s + precoComExtras(i) * i.quantidade, 0);
   document.getElementById('np-itens').innerHTML = itensNovoPedido.map(i => {
     const detalhes = [];
-    if(i.sabor_nome) detalhes.push('Sabor: ' + escHtml(i.sabor_nome));
+    if(i.sabor_nomes && i.sabor_nomes.length) detalhes.push('Sabor: ' + i.sabor_nomes.map(escHtml).join(' + '));
     if(i.adicionais && i.adicionais.length) detalhes.push('+ ' + i.adicionais.map(a => escHtml(a.nome)).join(', '));
     return (
       '<div class="item-linha" style="flex-wrap:wrap;">' +
@@ -1658,7 +1682,7 @@ async function salvarNovoPedido(botao){
   const itensParaEnviar = itensNovoPedido.map(i => ({
     produto_id: i.produto_id,
     quantidade: i.quantidade,
-    sabor_id: i.sabor_id || null,
+    sabor_ids: i.sabor_ids || [],
     adicional_ids: (i.adicionais || []).map(a => a.id)
   }));
   const { data: pedido, error } = await db.rpc('criar_pedido_completo', {
@@ -1669,23 +1693,35 @@ async function salvarNovoPedido(botao){
   mostrarToast('Pedido #' + (pedido.numero_dia != null ? pedido.numero_dia : pedido.id) + ' criado!', 'sucesso');
   // Imprime a comanda assim que o pedido é criado (pra entregar pro
   // cozinheiro ou grudar no pedido de entrega) — monta a partir do carrinho
-  // que já está na tela, sem precisar buscar os itens de novo no banco.
+  // que já está na tela, sem precisar buscar os itens de novo no banco. Usa o
+  // mesmo formato de itens_pedido_sabores/itens_pedido_adicionais que vem do
+  // banco, pra imprimirPedido() não precisar de dois caminhos diferentes.
   const itensImpressao = itensNovoPedido.map(i => ({
     quantidade: i.quantidade,
     produtos: { nome: i.nome },
     preco_unit_no_momento: i.preco,
-    sabor_nome_no_momento: i.sabor_nome || null,
+    itens_pedido_sabores: (i.sabor_nomes || []).map(nome => ({ nome_no_momento: nome })),
     itens_pedido_adicionais: (i.adicionais || []).map(a => ({ nome_no_momento: a.nome, preco_no_momento: a.preco }))
   }));
   fecharModal(); carregarPedidos();
   imprimirPedido(pedido, itensImpressao);
 }
 
+// Nomes dos sabores de um item de pedido, na ordem certa de prioridade: tabela
+// itens_pedido_sabores (formato atual, suporta 1+ sabores) e, se vier vazia,
+// a coluna antiga sabor_nome_no_momento (pedidos criados antes dessa tabela
+// existir — sem esse fallback, pedidos velhos ficavam com o sabor sumido).
+function nomesSaborDoItem(item){
+  if(item.itens_pedido_sabores && item.itens_pedido_sabores.length) return item.itens_pedido_sabores.map(s => s.nome_no_momento);
+  if(item.sabor_nome_no_momento) return [item.sabor_nome_no_momento];
+  return [];
+}
+
 async function abrirDetalhePedido(id){
   const { data: pedido, error } = await db.from('pedidos').select('*').eq('id', id).single();
   if(error){ mostrarToast('Erro ao abrir pedido: ' + error.message, 'erro'); return; }
   const { data: itens, error: e2 } = await db.from('itens_pedido')
-    .select('*, produtos(nome), itens_pedido_adicionais(nome_no_momento, preco_no_momento)').eq('pedido_id', id);
+    .select('*, produtos(nome), itens_pedido_sabores(nome_no_momento), itens_pedido_adicionais(nome_no_momento, preco_no_momento)').eq('pedido_id', id);
   if(e2){ mostrarToast('Erro ao carregar itens: ' + e2.message, 'erro'); return; }
 
   const finalizavel = pedido.status === 'aberto' || pedido.status === 'pronto';
@@ -1695,7 +1731,8 @@ async function abrirDetalhePedido(id){
     '<p><span class="badge badge-' + pedido.status + '">' + pedido.status + '</span></p>' +
     '<ul>' + itens.map(i => {
       const extras = [];
-      if(i.sabor_nome_no_momento) extras.push('Sabor: ' + escHtml(i.sabor_nome_no_momento));
+      const saboresI = nomesSaborDoItem(i);
+      if(saboresI.length) extras.push('Sabor: ' + saboresI.map(escHtml).join(' + '));
       if(i.itens_pedido_adicionais && i.itens_pedido_adicionais.length) extras.push('+ ' + i.itens_pedido_adicionais.map(a => escHtml(a.nome_no_momento)).join(', '));
       const precoComExtras = Number(i.preco_unit_no_momento) + (i.itens_pedido_adicionais || []).reduce((s,a) => s + Number(a.preco_no_momento), 0);
       return '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + (extras.length ? ' <small style="color:var(--cor-texto-suave);">(' + extras.join(' · ') + ')</small>' : '') + ' — ' + formatarReais(precoComExtras * i.quantidade) + '</li>';
@@ -1741,7 +1778,8 @@ function imprimirPedido(pedido, itens){
   const nomeLoja = (document.getElementById('sidebar-loja-nome') || {}).textContent || 'Comandiz';
   const linhas = itens.map(i => {
     const extras = [];
-    if(i.sabor_nome_no_momento) extras.push('Sabor: ' + i.sabor_nome_no_momento);
+    const saboresI = nomesSaborDoItem(i);
+    if(saboresI.length) extras.push('Sabor: ' + saboresI.join(' + '));
     (i.itens_pedido_adicionais || []).forEach(a => extras.push('+ ' + a.nome_no_momento));
     const precoComExtras = Number(i.preco_unit_no_momento) + (i.itens_pedido_adicionais || []).reduce((s,a) => s + Number(a.preco_no_momento), 0);
     return '<div style="margin-bottom:4px;">' +
@@ -1980,7 +2018,7 @@ async function carregarRelatorioEntradas(){
 // =========================================================================
 async function carregarCozinha(){
   const { data, error } = await db.from('pedidos')
-    .select('*, itens_pedido(quantidade, produtos(nome), sabor_nome_no_momento, itens_pedido_adicionais(nome_no_momento))')
+    .select('*, itens_pedido(quantidade, produtos(nome), sabor_nome_no_momento, itens_pedido_sabores(nome_no_momento), itens_pedido_adicionais(nome_no_momento))')
     .eq('loja_id', meuPerfil.loja_id)
     .in('status', ['aberto','pronto'])
     .order('criado_em', { ascending: true });
@@ -1992,7 +2030,8 @@ async function carregarCozinha(){
       '<div style="font-size:11px;color:var(--cor-texto-suave);margin:-2px 0 6px;">' + formatarDataPedido(p.criado_em) + '</div>' +
       '<ul>' + p.itens_pedido.map(i => {
         const extras = [];
-        if(i.sabor_nome_no_momento) extras.push(escHtml(i.sabor_nome_no_momento));
+        const saboresI = nomesSaborDoItem(i);
+        if(saboresI.length) extras.push(saboresI.map(escHtml).join(' + '));
         if(i.itens_pedido_adicionais && i.itens_pedido_adicionais.length) extras.push('+ ' + i.itens_pedido_adicionais.map(a => escHtml(a.nome_no_momento)).join(', '));
         return '<li>' + i.quantidade + 'x ' + (i.produtos ? escHtml(i.produtos.nome) : '?') + (extras.length ? ' <small>(' + extras.join(' · ') + ')</small>' : '') + '</li>';
       }).join('') + '</ul>' +
