@@ -369,6 +369,20 @@
           <tbody id="produtos-tabela"></tbody>
         </table>
       </div>
+      <!-- Catálogo de itens adicionais compartilhado entre produtos (ex: "Queijo
+           extra"), pra não ter que retdigitar o mesmo item em cada produto — ver
+           carregarItensCatalogo() e o botão "+ Do catálogo" no modal de produto. -->
+      <div class="cartao" style="margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <strong>Itens adicionais (catálogo)</strong>
+          <button class="btn-secundario btn-pequeno" onclick="abrirModalItemCatalogo()">+ Novo item</button>
+        </div>
+        <p style="color:var(--cor-texto-suave);font-size:13px;margin:6px 0 0;">Cadastre aqui um item uma vez só (ex: "Queijo extra") e puxe ele em quantos produtos quiser, direto no cadastro do produto. Categoria vazia = aparece pra qualquer produto.</p>
+        <table style="margin-top:10px;">
+          <thead><tr><th>Nome</th><th>Categoria</th><th>Preço</th><th>Ativo</th><th></th></tr></thead>
+          <tbody id="itens-catalogo-tabela"></tbody>
+        </table>
+      </div>
     </section>
 
     <!-- ESTOQUE -->
@@ -773,7 +787,7 @@ function trocarAba(aba){
   if(aba === 'pedidos') carregarPedidos();
   if(aba === 'entradas') carregarEntradas();
   if(aba === 'cozinha') carregarCozinha();
-  if(aba === 'cardapio') carregarProdutos();
+  if(aba === 'cardapio'){ carregarProdutos(); carregarItensCatalogo(); }
   if(aba === 'estoque') carregarInsumos();
   if(aba === 'despesas') carregarDespesas();
   if(aba === 'fiados') carregarFiados();
@@ -1201,6 +1215,7 @@ function iniciarRelogioInicio(){
 // por produto clicado.
 let saboresCachePorProduto = {};
 let adicionaisCachePorProduto = {};
+let itensCatalogoCache = [];
 
 async function carregarCardapioCache(){
   const { data, error } = await db.from('produtos')
@@ -1220,6 +1235,11 @@ async function carregarCardapioCache(){
     const { data: adicionais } = await db.from('produto_adicionais').select('*').in('produto_id', idsComAdicionais).eq('ativo', true).order('ordem');
     (adicionais || []).forEach(a => { (adicionaisCachePorProduto[a.produto_id] = adicionaisCachePorProduto[a.produto_id] || []).push(a); });
   }
+
+  const { data: catalogo, error: eCat } = await db.from('itens_catalogo')
+    .select('*').eq('loja_id', meuPerfil.loja_id).eq('ativo', true).order('ordem');
+  if(eCat){ mostrarToast('Erro ao carregar catálogo de itens: ' + eCat.message, 'erro'); return; }
+  itensCatalogoCache = catalogo || [];
 }
 
 let _cacheTodosProdutos = [];
@@ -1242,6 +1262,57 @@ async function carregarProdutos(){
   cardapioCache = (data || []).filter(p => p.ativo);
 }
 
+async function carregarItensCatalogo(){
+  const { data, error } = await db.from('itens_catalogo')
+    .select('*').eq('loja_id', meuPerfil.loja_id).order('ordem');
+  if(error){ mostrarToast('Erro ao carregar catálogo de itens: ' + error.message, 'erro'); return; }
+  const corpo = document.getElementById('itens-catalogo-tabela');
+  corpo.innerHTML = (data || []).map(it => (
+    '<tr><td>' + escHtml(it.nome) + '</td><td>' + (it.categoria ? escHtml(it.categoria) : '<span style="color:var(--cor-texto-suave);">qualquer</span>') + '</td><td>' + formatarReais(it.preco) + '</td>' +
+    '<td>' + (it.ativo ? '✅' : '—') + '</td>' +
+    '<td><button class="btn-secundario btn-pequeno" onclick="abrirModalItemCatalogo(' + it.id + ')">Editar</button></td></tr>'
+  )).join('') || '<tr><td colspan="5" style="color:var(--cor-texto-suave);">Nenhum item cadastrado ainda.</td></tr>';
+}
+
+async function abrirModalItemCatalogo(id){
+  let item = null;
+  if(id){
+    const { data, error } = await db.from('itens_catalogo').select('*').eq('id', id).single();
+    if(error){ mostrarToast('Erro ao carregar item: ' + error.message, 'erro'); return; }
+    item = data;
+  }
+  abrirModal(
+    '<h2>' + (item ? 'Editar item do catálogo' : 'Novo item do catálogo') + '</h2>' +
+    '<form id="form-item-catalogo">' +
+      '<label>Nome</label><input type="text" id="cat-nome" required value="' + (item ? escHtml(item.nome) : '') + '">' +
+      '<label>Categoria (opcional)</label><input type="text" id="cat-categoria" value="' + (item ? escHtml(item.categoria || '') : '') + '" placeholder="Ex: Pastel — deixe vazio pra aparecer em qualquer produto">' +
+      '<label>Preço (R$)</label><input type="number" step="0.01" min="0" id="cat-preco" required value="' + (item ? item.preco : '') + '">' +
+      '<label><input type="checkbox" id="cat-ativo" style="width:auto;" ' + (!item || item.ativo ? 'checked' : '') + '> Ativo</label>' +
+      '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
+    '</form>'
+  );
+  document.getElementById('form-item-catalogo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const registro = {
+      loja_id: meuPerfil.loja_id,
+      nome: document.getElementById('cat-nome').value.trim(),
+      categoria: document.getElementById('cat-categoria').value.trim() || null,
+      preco: Number(document.getElementById('cat-preco').value),
+      ativo: document.getElementById('cat-ativo').checked
+    };
+    if(!registro.nome){ mostrarToast('Informe o nome.', 'erro'); return; }
+    if(registro.preco < 0){ mostrarToast('Preço não pode ser negativo.', 'erro'); return; }
+    const btn = travarSubmit(e.target);
+    if(!btn) return;
+    const { error } = item
+      ? await db.from('itens_catalogo').update(registro).eq('id', item.id)
+      : await db.from('itens_catalogo').insert(registro);
+    if(error){ destravarBotao(btn); mostrarToast('Erro ao salvar item: ' + error.message, 'erro'); return; }
+    mostrarToast('Item salvo!', 'sucesso');
+    fecharModal(); await carregarCardapioCache(); carregarItensCatalogo();
+  });
+}
+
 // Guardam o estado "como veio do banco" pros sabores/adicionais do produto
 // sendo editado, pra comparar na hora de salvar e saber o que foi removido
 // (linha some da tela) vs alterado vs criado. Resetados toda vez que o
@@ -1255,8 +1326,8 @@ function linhaSaborHtml(id, nome){
     '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>' +
   '</div>';
 }
-function linhaAdicionalHtml(id, nome, preco){
-  return '<div class="linha-adicional" data-id="' + (id || '') + '" style="display:flex;gap:6px;margin-bottom:6px;">' +
+function linhaAdicionalHtml(id, nome, preco, catalogoId){
+  return '<div class="linha-adicional" data-id="' + (id || '') + '" data-catalogo-id="' + (catalogoId || '') + '" style="display:flex;gap:6px;margin-bottom:6px;">' +
     '<input type="text" class="adicional-nome" placeholder="Nome (ex: Borda recheada)" value="' + escHtml(nome || '') + '" style="flex:2;">' +
     '<input type="number" step="0.01" min="0" class="adicional-preco" placeholder="Preço" value="' + (preco != null ? preco : '') + '" style="flex:1;">' +
     '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>' +
@@ -1266,7 +1337,30 @@ function adicionarLinhaSabor(nome){
   document.getElementById('prod-sabores-lista').insertAdjacentHTML('beforeend', linhaSaborHtml(null, nome));
 }
 function adicionarLinhaAdicional(nome, preco){
-  document.getElementById('prod-adicionais-lista').insertAdjacentHTML('beforeend', linhaAdicionalHtml(null, nome, preco));
+  document.getElementById('prod-adicionais-lista').insertAdjacentHTML('beforeend', linhaAdicionalHtml(null, nome, preco, null));
+}
+// Compara a categoria de um item do catálogo com a categoria do produto sendo
+// editado — comparação exata (trim + case-insensitive). Categoria vazia/nula
+// no item do catálogo significa "serve pra qualquer produto".
+function categoriaBate(categoriaItem, categoriaProduto){
+  if(!categoriaItem) return true;
+  return categoriaItem.trim().toLowerCase() === (categoriaProduto || '').trim().toLowerCase();
+}
+function atualizarSelectCatalogoAdicionais(){
+  const sel = document.getElementById('prod-catalogo-select');
+  if(!sel) return;
+  const categoriaProduto = document.getElementById('prod-categoria').value;
+  const opcoes = itensCatalogoCache.filter(it => categoriaBate(it.categoria, categoriaProduto));
+  sel.innerHTML = opcoes.length
+    ? opcoes.map(it => '<option value="' + it.id + '">' + escHtml(it.nome) + ' (' + formatarReais(it.preco) + ')</option>').join('')
+    : '<option value="">Nenhum item do catálogo pra essa categoria</option>';
+}
+function adicionarLinhaAdicionalDoCatalogo(){
+  const sel = document.getElementById('prod-catalogo-select');
+  if(!sel || !sel.value) return;
+  const item = itensCatalogoCache.find(it => it.id === Number(sel.value));
+  if(!item) return;
+  document.getElementById('prod-adicionais-lista').insertAdjacentHTML('beforeend', linhaAdicionalHtml(null, item.nome, item.preco, item.id));
 }
 function alternarSecaoSabores(){
   document.getElementById('prod-sabores-secao').style.display = document.getElementById('prod-tem-sabor').checked ? 'block' : 'none';
@@ -1299,7 +1393,7 @@ async function abrirModalProduto(id){
     '<h2>' + (produto ? 'Editar produto' : 'Novo produto') + '</h2>' +
     '<form id="form-produto">' +
       '<label>Nome</label><input type="text" id="prod-nome" required value="' + (produto ? escHtml(produto.nome) : '') + '">' +
-      '<label>Categoria</label><input type="text" id="prod-categoria" value="' + (produto ? escHtml(produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
+      '<label>Categoria</label><input type="text" id="prod-categoria" oninput="atualizarSelectCatalogoAdicionais()" value="' + (produto ? escHtml(produto.categoria || '') : '') + '" placeholder="Ex: Pizza, Bebida, Prato feito">' +
       '<label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="prod-preco" required value="' + (produto ? produto.preco_venda : '') + '">' +
       '<label><input type="checkbox" id="prod-ativo" style="width:auto;" ' + (!produto || produto.ativo ? 'checked' : '') + '> Ativo (aparece no cardápio pra pedidos)</label>' +
       '<label style="margin-top:14px;"><input type="checkbox" id="prod-tem-sabor" style="width:auto;" onchange="alternarSecaoSabores()" ' + (temSabor ? 'checked' : '') + '> Cliente escolhe sabor (ex: pastéis)</label>' +
@@ -1310,12 +1404,17 @@ async function abrirModalProduto(id){
       '</div>' +
       '<label><input type="checkbox" id="prod-tem-adicionais" style="width:auto;" onchange="alternarSecaoAdicionais()" ' + (temAdicionais ? 'checked' : '') + '> Tem itens adicionais (ex: borda recheada, bacon)</label>' +
       '<div id="prod-adicionais-secao" style="display:' + (temAdicionais ? 'block' : 'none') + ';margin:6px 0 10px;">' +
-        '<div id="prod-adicionais-lista">' + _adicionaisOriginaisModal.map(a => linhaAdicionalHtml(a.id, a.nome, a.preco)).join('') + '</div>' +
+        '<div id="prod-adicionais-lista">' + _adicionaisOriginaisModal.map(a => linhaAdicionalHtml(a.id, a.nome, a.preco, a.catalogo_id)).join('') + '</div>' +
         '<button type="button" class="btn-secundario btn-pequeno" onclick="adicionarLinhaAdicional()">+ Adicional</button>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;">' +
+          '<select id="prod-catalogo-select" style="flex:1;"></select>' +
+          '<button type="button" class="btn-secundario btn-pequeno" onclick="adicionarLinhaAdicionalDoCatalogo()">+ Do catálogo</button>' +
+        '</div>' +
       '</div>' +
       '<button type="submit" class="btn" style="width:100%;margin-top:16px;">Salvar</button>' +
     '</form>'
   );
+  atualizarSelectCatalogoAdicionais();
   document.getElementById('form-produto').addEventListener('submit', async (e) => {
     e.preventDefault();
     const temSaborForm = document.getElementById('prod-tem-sabor').checked;
@@ -1340,7 +1439,8 @@ async function abrirModalProduto(id){
     const linhasAdicional = Array.from(document.querySelectorAll('#prod-adicionais-lista .linha-adicional')).map(el => ({
       id: el.dataset.id ? Number(el.dataset.id) : null,
       nome: el.querySelector('.adicional-nome').value.trim(),
-      preco: Number(el.querySelector('.adicional-preco').value) || 0
+      preco: Number(el.querySelector('.adicional-preco').value) || 0,
+      catalogoId: el.dataset.catalogoId ? Number(el.dataset.catalogoId) : null
     })).filter(a => a.nome);
 
     if(temSaborForm && linhasSabor.length === 0){ mostrarToast('Cadastre ao menos 1 sabor, ou desmarque "Cliente escolhe 1 sabor".', 'erro'); return; }
@@ -1381,7 +1481,7 @@ async function abrirModalProduto(id){
         const { error: eUp } = await db.from('produto_adicionais').update({ nome: a.nome, preco: a.preco }).eq('id', a.id);
         if(eUp) erros.push(eUp.message);
       } else {
-        const { error: eIn } = await db.from('produto_adicionais').insert({ produto_id: produtoSalvo.id, nome: a.nome, preco: a.preco });
+        const { error: eIn } = await db.from('produto_adicionais').insert({ produto_id: produtoSalvo.id, nome: a.nome, preco: a.preco, catalogo_id: a.catalogoId });
         if(eIn) erros.push(eIn.message);
       }
     }
