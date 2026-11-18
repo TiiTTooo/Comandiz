@@ -1984,7 +1984,7 @@ function linhaEntradaHtml(chaveFixa, nome, valor){
     (fixo
       ? '<div style="flex:1;"><label>' + nome + '</label><input type="text" class="entrada-tipo-nome" value="' + escHtml(nome) + '" disabled></div>'
       : '<div style="flex:1;"><label>Tipo</label><input type="text" class="entrada-tipo-nome" placeholder="Ex: Maquininha 1" value="' + escHtml(nome || '') + '"></div>') +
-    '<div style="width:120px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="entrada-tipo-valor" value="' + (valor || 0) + '"></div>' +
+    '<div style="width:120px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="entrada-tipo-valor" value="' + (valor || 0) + '" onfocus="this.select()"></div>' +
     (fixo ? '' : '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>') +
   '</div>';
 }
