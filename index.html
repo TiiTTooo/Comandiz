@@ -21,6 +21,11 @@
   button{cursor:pointer;font-family:inherit;}
   input,select,textarea{font-family:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--cor-borda);border-radius:8px;width:100%;background:var(--cor-card);color:var(--cor-texto);}
   label{display:block;font-size:13px;color:var(--cor-texto-suave);margin:10px 0 4px;}
+  /* Campo de valor da aba Entradas: sem as setinhas de +/- do number
+     padrão (atrapalham mais do que ajudam — fácil de clicar sem querer e
+     mudar o valor) e sem step forçando casas decimais. */
+  .entrada-tipo-valor::-webkit-inner-spin-button, .entrada-tipo-valor::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  .entrada-tipo-valor{-moz-appearance:textfield;}
   .btn{background:var(--cor-primaria);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:15px;font-weight:600;}
   .btn:hover{background:var(--cor-primaria-escura);}
   .btn-secundario{background:var(--cor-card);color:var(--cor-texto);border:1px solid var(--cor-borda);border-radius:8px;padding:10px 16px;font-size:15px;}
@@ -342,7 +347,8 @@
         <input type="date" id="ent-data" onchange="carregarEntradaDoDia()">
         <div id="ent-tipos-lista" style="margin-top:10px;"></div>
         <button type="button" class="btn-secundario btn-pequeno" onclick="adicionarTipoEntrada()">+ Novo tipo de entrada (ex: Maquininha 1)</button>
-        <button class="btn" style="width:100%;margin-top:14px;" onclick="salvarEntradaManual(this)">Salvar entradas do dia</button>
+        <div id="ent-soma-lancada" style="text-align:right;font-weight:700;margin-top:14px;">Soma lançada: R$ 0,00</div>
+        <button class="btn" style="width:100%;margin-top:10px;" onclick="salvarEntradaManual(this)">Salvar entradas do dia</button>
       </div>
 
       <div class="cartao">
@@ -949,6 +955,7 @@ async function carregarInicio(){
   const inicioSemana = new Date(agora);
   inicioSemana.setDate(inicioSemana.getDate() - 6);
   const inicioSemanaStr = dataLocalISO(inicioSemana);
+  const inicioMesStr = hojeStr.slice(0,7) + '-01';
 
   const { data: pedidosSemana, error: e1 } = await db.from('pedidos')
     .select('total, forma_pagamento, status, criado_em')
@@ -957,13 +964,31 @@ async function carregarInicio(){
     .lte('criado_em', hojeStr + 'T23:59:59');
   if(e1){ mostrarToast('Erro ao carregar início: ' + e1.message, 'erro'); return; }
 
+  // Lançamentos manuais (aba Entradas) também são venda de verdade — quem
+  // lança assim em vez de criar pedido no sistema não pode ficar de fora do
+  // "Vendido" do Início, senão o card mostra só um pedaço do que entrou.
+  // Busca desde o começo do intervalo mais antigo que a tela usa (início do
+  // mês ou início dos 7 dias, o que vier primeiro) e depois cada card filtra
+  // sua própria janela a partir desse mesmo resultado.
+  const inicioBuscaManuaisStr = inicioMesStr < inicioSemanaStr ? inicioMesStr : inicioSemanaStr;
+  const { data: manuaisPeriodo, error: eManuais } = await db.from('entradas_manuais')
+    .select('valor, data')
+    .eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicioBuscaManuaisStr)
+    .lte('data', hojeStr);
+  if(eManuais){ mostrarToast('Erro ao carregar início: ' + eManuais.message, 'erro'); return; }
+  const somaManuais = (de) => (manuaisPeriodo || []).filter(m => m.data >= de).reduce((s,m) => s + Number(m.valor), 0);
+  const manualHoje = (manuaisPeriodo || []).filter(m => m.data === hojeStr).reduce((s,m) => s + Number(m.valor), 0);
+  const manualSemana = somaManuais(inicioSemanaStr);
+  const manualMes = somaManuais(inicioMesStr);
+
   const pedidosHoje = (pedidosSemana || []).filter(p => dataLocalISO(p.criado_em) === hojeStr);
   const finalizadosHoje = pedidosHoje.filter(p => p.status === 'finalizado');
-  const totalHoje = finalizadosHoje.reduce((s,p) => s + Number(p.total), 0);
+  const totalHoje = finalizadosHoje.reduce((s,p) => s + Number(p.total), 0) + manualHoje;
   const abertos = pedidosHoje.filter(p => p.status === 'aberto' || p.status === 'pronto').length;
 
   const finalizadosSemana = (pedidosSemana || []).filter(p => p.status === 'finalizado');
-  const vendidoSemana = finalizadosSemana.reduce((s,p) => s + Number(p.total), 0);
+  const vendidoSemana = finalizadosSemana.reduce((s,p) => s + Number(p.total), 0) + manualSemana;
 
   const { data: despesasSemana } = await db.from('despesas')
     .select('valor, data')
@@ -982,9 +1007,9 @@ async function carregarInicio(){
   // antigo que isso ficava invisível no Início mesmo estando finalizado).
   // Mesma janela de dias que despesasMes (dia 1 do mês corrente até hoje), e
   // mesmo critério de "Vendido hoje"/"Vendido — 7 dias": conta todo pedido
-  // finalizado, incluindo fiado — é volume de venda, não caixa recebido (quem
-  // quiser só o que virou dinheiro de fato usa a aba Entradas).
-  const inicioMesStr = hojeStr.slice(0,7) + '-01';
+  // finalizado, incluindo fiado, MAIS os lançamentos manuais da aba Entradas
+  // nesse mesmo período — é volume de venda, não caixa recebido (quem quiser
+  // só o que virou dinheiro de fato usa a aba Entradas).
   const { data: pedidosMes, error: e1b } = await db.from('pedidos')
     .select('total')
     .eq('loja_id', meuPerfil.loja_id)
@@ -992,7 +1017,7 @@ async function carregarInicio(){
     .gte('criado_em', inicioMesStr + 'T00:00:00')
     .lte('criado_em', hojeStr + 'T23:59:59');
   if(e1b){ mostrarToast('Erro ao carregar início: ' + e1b.message, 'erro'); return; }
-  const vendidoMes = (pedidosMes || []).reduce((s,p) => s + Number(p.total), 0);
+  const vendidoMes = (pedidosMes || []).reduce((s,p) => s + Number(p.total), 0) + manualMes;
 
   const { data: estoqueBaixo } = await db.from('estoque_saldo')
     .select('*').eq('loja_id', meuPerfil.loja_id).eq('status_estoque', 'Baixo');
@@ -1984,12 +2009,22 @@ function linhaEntradaHtml(chaveFixa, nome, valor){
     (fixo
       ? '<div style="flex:1;"><label>' + nome + '</label><input type="text" class="entrada-tipo-nome" value="' + escHtml(nome) + '" disabled></div>'
       : '<div style="flex:1;"><label>Tipo</label><input type="text" class="entrada-tipo-nome" placeholder="Ex: Maquininha 1" value="' + escHtml(nome || '') + '"></div>') +
-    '<div style="width:120px;"><label>Valor (R$)</label><input type="number" step="0.01" min="0" class="entrada-tipo-valor" value="' + (valor || 0) + '" onfocus="this.select()"></div>' +
-    (fixo ? '' : '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove()">✕</button>') +
+    '<div style="width:120px;"><label>Valor (R$)</label><input type="number" min="0" class="entrada-tipo-valor" value="' + (valor || 0) + '" onfocus="this.select()" oninput="atualizarSomaEntradas()"></div>' +
+    (fixo ? '' : '<button type="button" class="btn-perigo btn-pequeno" onclick="this.parentElement.remove();atualizarSomaEntradas()">✕</button>') +
   '</div>';
+}
+// Soma ao vivo dos valores já digitados nos campos de Entradas, mostrada
+// antes do botão "Salvar entradas do dia" — só pra conferência visual, não
+// é lida em lugar nenhum na hora de salvar (cada campo é salvo do seu jeito).
+function atualizarSomaEntradas(){
+  const soma = Array.from(document.querySelectorAll('#ent-tipos-lista .entrada-tipo-valor'))
+    .reduce((s, el) => s + (Number(el.value) || 0), 0);
+  const elSoma = document.getElementById('ent-soma-lancada');
+  if(elSoma) elSoma.textContent = 'Soma lançada: ' + formatarReais(soma);
 }
 function adicionarTipoEntrada(nome, valor){
   document.getElementById('ent-tipos-lista').insertAdjacentHTML('beforeend', linhaEntradaHtml(null, nome, valor));
+  atualizarSomaEntradas();
 }
 
 async function carregarEntradas(){
@@ -2011,6 +2046,7 @@ async function carregarEntradaDoDia(){
   const lista = document.getElementById('ent-tipos-lista');
   lista.innerHTML = TIPOS_FIXOS_ENTRADA.map(t => linhaEntradaHtml(t.chave, t.rotulo, porForma[t.chave] || 0)).join('') +
     Object.keys(porForma).filter(f => !chavesFixas.includes(f)).map(f => linhaEntradaHtml(null, f, porForma[f])).join('');
+  atualizarSomaEntradas();
 }
 
 async function salvarEntradaManual(botao){
@@ -2583,14 +2619,25 @@ async function carregarRelatorio(){
     .gte('criado_em', inicio + 'T00:00:00').lte('criado_em', fim + 'T23:59:59');
   if(e1){ mostrarToast('Erro ao gerar relatório: ' + e1.message, 'erro'); return; }
 
+  // Lançamentos manuais (aba Entradas) entram nos mesmos totais — essa aba de
+  // Relatórios só olhava pedido criado pelo sistema e deixava de fora quem
+  // lança venda direto por forma de pagamento sem criar pedido.
+  const { data: manuais, error: eManuais } = await db.from('entradas_manuais')
+    .select('valor, forma_pagamento').eq('loja_id', meuPerfil.loja_id)
+    .gte('data', inicio).lte('data', fim);
+  if(eManuais){ mostrarToast('Erro ao gerar relatório: ' + eManuais.message, 'erro'); return; }
+
   const { data: despesas, error: e2 } = await db.from('despesas')
     .select('valor').eq('loja_id', meuPerfil.loja_id).gte('data', inicio).lte('data', fim);
   if(e2){ mostrarToast('Erro ao gerar relatório: ' + e2.message, 'erro'); return; }
 
-  const totalVendas = (pedidos || []).reduce((s,p) => s + Number(p.total), 0);
   const totalDespesas = (despesas || []).reduce((s,d) => s + Number(d.valor), 0);
   const porForma = {};
   (pedidos || []).forEach(p => { porForma[p.forma_pagamento] = (porForma[p.forma_pagamento] || 0) + Number(p.total); });
+  // Lançamento manual nunca é 'fiado' (fiado é sempre pedido ligado a um
+  // cliente), então só soma em cima do que já tem pra cada forma.
+  (manuais || []).forEach(m => { porForma[m.forma_pagamento] = (porForma[m.forma_pagamento] || 0) + Number(m.valor); });
+  const totalVendas = Object.values(porForma).reduce((s,v) => s + v, 0);
 
   // Fiado entra no "vendido" (o produto saiu), mas NÃO é dinheiro que entrou no
   // caixa ainda — por isso separamos "vendido" de "recebido em caixa" abaixo,
